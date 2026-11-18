@@ -145,7 +145,8 @@ export function mountMethods(host: HTMLElement, data: AppData, store: Store) {
     + `still active, ${by("acquired")} were acquired and ${by("exited")} stopped reporting. Peer averages built only from `
     + "today's companies would describe the survivors, so carriers that were acquired or stopped reporting stay in "
     + "the data. The universe is hand-selected (rules in the Python source); it is not a census of every filer. Lighter bars "
-    + "are groups whose consolidated figures are not comparable (see below).";
+    + "are groups whose consolidated figures are not comparable (see below)."
+    + statusCheckSentence(comps);
 
   // ---- (d) prose
   const pr = el("div", { class: "prose" });
@@ -163,6 +164,23 @@ export function mountMethods(host: HTMLElement, data: AppData, store: Store) {
     "Combined ratio: loss ratio plus expense ratio; below 100% means an underwriting profit.",
     "Return on equity: net income over average shareholders' equity. Investment yield: annualized net investment income over average investments. Reserve leverage: net loss reserves over trailing premium.",
   ]);
+
+  h("How company status is kept current");
+  ul([
+    "Each label (active, acquired, stopped filing) is checked against the SEC filing record at every build: a company counts as active only while its ticker is still among its SEC-listed tickers and it filed a 10-K, 10-Q (or the foreign-filer equivalents) in the last 200 days.",
+    "A merger proxy, going-private schedule (Schedule 13E-3) or tender offer filed in the last twelve months marks a deal as pending; an 8-K with item 5.01 (change in control) is shown on the company's page.",
+    "When a label disagrees with the record the build stops, and the stress lab simulates only companies that are independent and still reporting.",
+  ]);
+
+  h("The four data domains");
+  const docLink = (name: string, label: string) =>
+    el("a", { href: `https://github.com/willboyden/specialty-insurance-lab/blob/main/docs/domains/${name}.md`, text: label, rel: "noopener" });
+  pr.append(el("ul", {},
+    el("li", {}, "Claims and reserves: the reserve roll-forward every property-casualty filer tags (paid and incurred, current and prior years, reserves, reinsurance), turned into payout, development and tail-length measures. ", docLink("claims", "Method notes")),
+    el("li", {}, "Catastrophes: hurricane landfalls and season energy (NOAA HURDAT2), convective-storm reports (NOAA SPC), NFIP flood claims (OpenFEMA), wildfire (NIFC), earthquakes (USGS) and ENSO (NOAA CPC), aggregated to quarters and compared with the model's industry shock by ordinary least squares, with a leave-one-year-out check. ", docLink("catastrophe", "Method notes")),
+    el("li", {}, "Mergers and acquisitions: dates from the filing index (merger agreement, proxy, change-of-control 8-K, delisting); buyer, price and form of payment published only when SEC full-text search finds them together in the target's own deal filings; values and price-to-book from the target's last reported shares and equity. ", docLink("ma", "Method notes")),
+    el("li", {}, "People and technology: employees in each carrier's US 401(k) plans from Department of Labor Form 5500 filings, matched by employer ID (a US-only proxy for headcount), capital spending from XBRL cash-flow statements, and technology themes from SEC full-text search. ", docLink("people", "Method notes")),
+  ));
 
   h("How the raw facts become quarters");
   ul([
@@ -278,4 +296,12 @@ function statusKey(host: HTMLElement) {
     }
     host.append(el("span", { class: "key b-status" }, svg, el("span", { text: s.label })));
   }
+}
+
+function statusCheckSentence(comps: Company[]): string {
+  const checked = comps.find((c) => c.listing)?.listing?.checkedOn;
+  if (!checked) return "";
+  const pending = comps.filter((c) => c.listing?.derived === "pending").map((c) => c.name);
+  return ` Statuses were checked against the SEC filing record on ${checked}`
+    + (pending.length ? `; deals pending: ${pending.join(", ")}.` : ".");
 }

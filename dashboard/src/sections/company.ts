@@ -32,7 +32,14 @@ export function mountCompany(host: HTMLElement, data: AppData, store: Store) {
   const renderIdent = () => {
     const c = company();
     const inc = c.incorporated ? `${c.incorporated}${INCORPORATION[c.incorporated] ? ` (${INCORPORATION[c.incorporated]})` : ""}` : "–";
-    const status = c.status === "active" ? "Active SEC filer" : `${c.status === "acquired" ? "Acquired" : "Stopped filing"} ${c.statusYear ?? ""}${c.statusNote ? ` — ${c.statusNote}` : ""}`;
+    const L0 = c.listing;
+    const status = c.status !== "active"
+      ? `${c.status === "acquired" ? "Acquired" : "Stopped filing"} ${c.statusYear ?? ""}${c.statusNote ? ` — ${c.statusNote}` : ""}`
+      : L0?.derived === "pending"
+        ? `Active SEC filer, deal pending (filed: ${L0.pendingForms ?? "deal documents"})`
+        : "Active SEC filer"
+          + (L0?.lastChangeOfControl && L0.lastChangeOfControl >= `${Number(L0.checkedOn.slice(0, 4)) - 1}`
+            ? ` · change of control reported ${L0.lastChangeOfControl} (8-K item 5.01)` : "");
     ident.replaceChildren(
       el("strong", { text: `${c.name} (${c.ticker})` }), " · ", SEGMENT_SHORT[c.segment] ?? c.segment, " · ", status,
       el("br"),

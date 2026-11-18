@@ -15,6 +15,11 @@ How it was built (the candidate list is scripts/discover_universe.py's output, k
    platforms. The selection is a judgment call, written down here, not an exhaustive census.
 5. A benchmark cohort of standard commercial and personal lines carriers, for comparison.
 6. Six AI-infrastructure spenders, used only for an AI-capex indicator (capital expenditure tags).
+7. Kept current: scripts/discover_universe.py also reads the last two years' quarterly frames, so a carrier that
+   listed recently shows up before its first 10-K, and sil/status.py checks every label against the filing
+   record at each build. Under review (November 2026): Orion180 Insurance Group (listed 2025, SIC 6411), whose
+   filings mention homeowners and personal lines; it stays out until its prospectus's business description is
+   read (rule 3).
 
 Status notes say what the filing index shows (form types and dates) or what was widely reported (acquirer and year).
 """
@@ -87,8 +92,10 @@ COMPANIES: list[Company] = [
     Company(1636639, "PLGO", "Pelagos (Fidelis)", "specialty", BDA, include_note="formerly Fidelis Insurance Holdings"),
     Company(1576018, "SPNT", "SiriusPoint", "specialty", BDA, include_note="formerly Third Point Re"),
     Company(1794338, "IGIC", "International General", "specialty", BDA),
-    Company(1267395, "AHL", "Aspen Insurance", "specialty", BDA, "acquired", 2019,
-            "acquired by Apollo; common stock deregistered 2019 (Form 15); 20-F annual reports since, no quarterly data"),
+    Company(1267395, "AHL", "Aspen Insurance", "specialty", BDA, "acquired", 2026,
+            "taken private by Apollo 2019 (20-F annual reports after, no quarterly data); listed again on the NYSE"
+            " May 2025 (F-1, 424B4, 8-A12B); acquired by Sompo, delisted February 2026 (Form 25) and deregistered"
+            " March 2026 (Form 15)"),
     Company(1163348, "AWH", "Allied World", "specialty", BDA, "acquired", 2017, "acquired by Fairfax"),
     Company(1179755, "ENH", "Endurance Specialty", "specialty", BDA, "acquired", 2017, "acquired by Sompo"),
     Company(875159, "XL", "XL Group", "specialty", BDA, "acquired", 2018, "acquired by AXA"),
@@ -97,7 +104,9 @@ COMPANIES: list[Company] = [
     # ---- Niche specialty
     Company(1018979, "AMSF", "AMERISAFE", "specialty", NICHE),
     Company(1379041, "EIG", "Employers Holdings", "specialty", NICHE),
-    Company(1127703, "PRA", "ProAssurance", "specialty", NICHE),
+    Company(1127703, "PRA", "ProAssurance", "specialty", NICHE, "acquired", 2026,
+            "acquired by The Doctors Company: merger agreement March 2025, closed June 2026 (8-K item 5.01), delisted"
+            " (Form 25) and deregistered (Form 15)"),
     Company(1365555, "AFSI", "AmTrust Financial", "specialty", NICHE, "acquired", 2018, "taken private"),
     Company(1267201, "SBX", "SeaBright", "specialty", NICHE, "acquired", 2013, "acquired by Enstar"),
     # ---- Benchmark: standard commercial and personal lines
@@ -109,7 +118,9 @@ COMPANIES: list[Company] = [
     Company(230557, "SIGI", "Selective Insurance", "benchmark", STD),
     Company(944695, "THG", "Hanover Insurance", "benchmark", STD),
     Company(80661, "PGR", "Progressive", "benchmark", STD),
-    Company(899051, "ALL", "Allstate", "benchmark", STD, include_note="no consistent loss tag in recent filings; kept out of the model and peer averages", comparable=False),
+    Company(899051, "ALL", "Allstate", "benchmark", STD, include_note="premium lines are absent from SEC company-facts data after Q1 2018 (likely tagged with a"
+            " product dimension, which that API omits), so its quarterly data end there; kept out of the model and peer"
+            " averages", comparable=False),
     # ---- AI-capex indicator (only capital-expenditure and revenue tags are kept)
     Company(789019, "MSFT", "Microsoft", "ai_indicator", AI),
     Company(1652044, "GOOGL", "Alphabet", "ai_indicator", AI),

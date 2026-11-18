@@ -1,8 +1,10 @@
 """Compute the headline findings from the exported dashboard data and write docs/findings.md.
 
-Every number quoted in the README comes from here, so the text cannot drift from the data:
+Every number quoted in the README comes from here, so the text cannot drift from the data: the core findings
+from the exported JSON, the data-domain findings (claims, catastrophes, M&A, people) from the same database
+tables those files were exported from, right after the export:
 
-    .venv/bin/python -m scripts.findings
+    uv run python -m scripts.findings
 """
 
 from __future__ import annotations
@@ -24,6 +26,12 @@ def load(name: str):
 
 def pct(v: float, d: int = 1) -> str:
     return f"{v * 100:.{d}f}%"
+
+
+def spct(v: float, d: int = 1) -> str:
+    """Signed percent: a true minus sign, and no '-0.0%'."""
+    r = round(v * 100, d)
+    return f"{'+' if r > 0 else '−' if r < 0 else ''}{abs(r):.{d}f}%"
 
 
 def pts(v: float, d: int = 1) -> str:
@@ -184,6 +192,7 @@ def main() -> None:
         out.append(f"- **{names.get(key, key)}**: biggest combined-ratio hits {hits}; biggest capital hits "
                    + ", ".join(f"{t} {pts(c, 0)} of equity" for t, _, c, _ in capw) + ".")
     out.append("")
+    out += domain_findings(load("catastrophe.json") if (DATA / "catastrophe.json").exists() else None)
     d = meta["diagnostics"]
     out += ["## Model diagnostics", "",
             (f"- {d['parameters_checked']} parameters checked: max R-hat {d['max_r_hat']:.3f}, minimum bulk ESS {d['min_ess_bulk']:.0f}, "
@@ -198,6 +207,150 @@ def main() -> None:
         text = text[: text.index(a) + len(a)] + "\n" + body + "\n" + text[text.index(b):]
         readme.write_text(text)
     print("\n".join(out))
+
+
+def domain_findings(cat: dict | None) -> list[str]:
+    """Claims, catastrophes, M&A and people: queried from the tables the domain files were exported from."""
+    from sil import db
+
+    conn = db.connect()
+    def one(sql: str, *a):
+        return conn.execute(sql, a).fetchone()
+
+    out: list[str] = []
+
+    # ---- claims and reserves
+    rows = conn.execute("""
+        select case when fiscal_year between 2010 and 2017 then '2010–2017' when fiscal_year in (2023, 2024)
+                    then '2023–2024' else fiscal_year::text end,
+               percentile_cont(0.5) within group (order by dev_pct_open), count(*) filter (where dev_pct_open > 0),
+               count(*)
+        from core.claims_year q join ref.company c using (cik)
+        where c.cohort = 'specialty' and c.comparable and dev_pct_open is not null
+          and (fiscal_year between 2010 and 2017 or fiscal_year >= 2023)
+        group by 1 order by 1""").fetchall()
+    if rows:
+        latest = one("select max(fiscal_year) from core.claims_year where survival is not null")[0]
+        tails = conn.execute("""
+            select c.short_name, q.survival, q.paid_to_incurred from core.claims_year q join ref.company c using (cik)
+            where q.fiscal_year = %s and c.cohort = 'specialty' and c.comparable and c.status = 'active'
+              and q.survival is not null order by q.survival desc limit 3""", (latest,)).fetchall()
+        med_surv = one("""select percentile_cont(0.5) within group (order by q.survival) from core.claims_year q
+            join ref.company c using (cik) where q.fiscal_year = %s and c.cohort = 'specialty' and c.comparable
+            and c.status = 'active' and q.survival is not null""", latest)[0]
+        growth = one("""
+            with g as (select cik, fiscal_year, paid_to_incurred,
+                              npe / nullif(lag(npe) over (partition by cik order by fiscal_year), 0) - 1 as growth
+                       from core.claims_year)
+            select corr(g.growth, g.paid_to_incurred), count(*) from g join ref.company c using (cik)
+            where g.fiscal_year = %s and c.comparable and c.status = 'active' and g.growth is not null
+              and g.paid_to_incurred is not null""", latest)
+        worst = conn.execute("""
+            select c.short_name, q.fiscal_year, q.dev_pct_open from core.claims_year q join ref.company c using (cik)
+            where c.cohort = 'specialty' and q.dev_pct_open is not null order by q.dev_pct_open desc limit 3""").fetchall()
+        n_cy = one("select count(*), count(distinct cik), min(fiscal_year), max(fiscal_year) from core.claims_year"
+                   " where fiscal_year >= 2009")
+        out += [f"## Claims and reserves ({n_cy[1]} carriers, fiscal {n_cy[2]}–{n_cy[3]})", "",
+                "- Median prior-year reserve development of comparable specialty carriers, as a share of opening "
+                "reserves (negative = releases): " + "; ".join(
+                    f"{p_} {spct(m)} ({a} of {n} carriers adverse)" for p_, m, a, n in rows) + ".",
+                f"- Longest tails in fiscal {latest} (years of paid claims held in reserve): " + ", ".join(
+                    f"{nm} {sv:.1f} yrs (paid {pct(pti, 0)} of incurred)" for nm, sv, pti in tails)
+                + f"; specialty median {med_surv:.1f} yrs.",
+                (f"- Premium growth and paid-to-incurred across {growth[1]} active carriers, fiscal {latest}: "
+                 f"correlation {growth[0]:+.2f} (new business is incurred at once and paid over years)."),
+                "- Largest single-year reserve charges: " + ", ".join(
+                    f"{nm} {fy} ({pct(d, 1)} of opening reserves)" for nm, fy, d in worst) + ".", ""]
+
+    # ---- catastrophes
+    if cat and cat.get("fit"):
+        fit = cat["fit"]
+        gap = max(fit["largest"], key=lambda r: abs(r["f"] - r["fitted"]))
+        enso = one("""select corr(ace, oni_aso), count(*) filter (where ace is not null and oni_aso is not null),
+                        avg(ace) filter (where oni_aso >= 0.5), avg(ace) filter (where oni_aso <= -0.5)
+                      from core.peril_year""")
+        quiet = [r[0] for r in conn.execute(
+            "select year from core.peril_year where us_landfalls = 0 and year >= 2000 order by year")]
+        nfip = one("select sum(paid_total), count(*) from raw.nfip_event")
+        top = one("select flood_event, paid_total from raw.nfip_event order by paid_total desc limit 1")
+        out += ["## Catastrophes", "",
+                (f"- US perils explain {pct(fit['r2'], 0)} of the model's industry shock in sample (adjusted "
+                 f"{pct(fit['adjR2'], 0)}) and {pct(fit['cvR2'], 0)} out of sample ({fit['n']} quarters, "
+                 f"{quarter(fit['window'][0])}–{quarter(fit['window'][1])})."),
+                (f"- The largest miss is {quarter(gap['q'])}: shock {gap['f']:+.2f} sd, US perils predict "
+                 f"{gap['fitted']:+.2f} sd (carriers write worldwide; the indices are US only)."),
+                (f"- ENSO (Aug–Oct ONI) and Atlantic season energy (ACE) correlate {enso[0]:+.2f} over {enso[1]} "
+                 f"seasons: El Niño seasons average {enso[2]:.0f} ACE, La Niña seasons {enso[3]:.0f}."),
+                f"- Seasons since 2000 without a US hurricane landfall: {', '.join(map(str, quiet))}.",
+                (f"- NFIP paid ${nfip[0] / 1e9:.1f}B (nominal) on flood events since 2000; the largest is "
+                 f"{top[0]} at ${top[1] / 1e9:.1f}B."), ""]
+
+    # ---- mergers and acquisitions
+    closed = conn.execute("""
+        select r.ticker, r.acquirer, r.grp, d.price_to_book, d.roe_ttm, d.implied_value, d.days_to_close, d.closed
+        from core.ma_deal d join ref.ma_deal r using (key) where d.closed is not null""").fetchall()
+    if closed:
+        pb = sorted(r[3] for r in closed if r[3] is not None)
+        pairs = [(r[3], r[4]) for r in closed if r[3] is not None and r[4] is not None]
+        corr = one("select corr(a, b) from unnest(%s::float8[], %s::float8[]) as t(a, b)",
+                   [float(a) for a, _ in pairs], [float(b) for _, b in pairs])[0]
+        big = max((r for r in closed if r[5]), key=lambda r: r[5])
+        by_grp: dict[str, list] = {}
+        for r in closed:
+            by_grp.setdefault(r[2], []).append(r)
+        listed = one("""select count(distinct cik) filter (where (listed_from is null or listed_from <= '2008-12-31')
+                          and (listed_until is null or listed_until > '2008-12-31')),
+                          count(distinct cik) filter (where listed_until is null)
+                        from core.ma_listing l join ref.company c using (cik) where c.cohort = 'specialty'""")
+        days = sorted(r[6] for r in closed if r[6] is not None)
+        out += [(f"## Mergers and acquisitions ({len(closed)} closed deals, "
+                 f"{min(r[7] for r in closed).year}–{max(r[7] for r in closed).year})"), "",
+                (f"- Implied equity value ${sum(float(r[5] or 0) for r in closed) / 1e9:.1f}B; the largest is "
+                 f"{big[0]} by {big[1]} at ${float(big[5]) / 1e9:.1f}B."),
+                (f"- Median price-to-book {st.median(float(x) for x in pb):.2f}× (range {float(pb[0]):.2f}–"
+                 f"{float(pb[-1]):.2f}×, {len(pb)} deals); correlation with the target's trailing ROE "
+                 f"{corr:+.2f} ({len(pairs)} deals)."),
+                "- Buyers: " + "; ".join(f"{g} {len(rs)} (${sum(float(r[5] or 0) for r in rs) / 1e9:.1f}B)"
+                                          for g, rs in sorted(by_grp.items(), key=lambda kv: -len(kv[1]))) + ".",
+                (f"- Median time from the first statement of terms to closing: {st.median(days):.0f} days "
+                 f"({days[0]}–{days[-1]})."),
+                f"- Listed specialty carriers in this universe: {listed[0]} at the end of 2008, {listed[1]} now.", ""]
+
+    # ---- people and technology
+    yr = one("select max(fiscal_year) from core.people_year where us_plan_active is not null")[0]
+    if yr:
+        us_based = ("c.cohort in ('specialty', 'benchmark') and c.comparable and c.status = 'active'"
+                    " and c.segment <> 'Bermuda and international specialty (re)insurance'")
+        ppe = one(f"""select percentile_cont(0.5) within group (order by npe / us_plan_active), count(*)
+            from core.people_year p join ref.company c using (cik)
+            where p.fiscal_year = %s and {us_based} and p.us_plan_active > 0 and p.npe > 0""", yr)
+        gap = conn.execute("""
+            with e as (select cik, fiscal_year, us_plan_active, npe from core.people_year
+                       where us_plan_active > 0 and npe > 0)
+            select (power(b.npe / a.npe, 0.2) - 1) - (power(b.us_plan_active::float8 / a.us_plan_active, 0.2) - 1)
+            from e a join e b on a.cik = b.cik and b.fiscal_year = %s and a.fiscal_year = %s - 5
+            join ref.company c on c.cik = a.cik where """ + us_based, (yr, yr)).fetchall()
+        gaps = [float(g[0]) for g in gap]
+        ai = dict(conn.execute("""
+            with f as (select s.accession, extract(year from s.filing_date)::int y from raw.sec_filing s
+                       join ref.company c using (cik)
+                       where c.cohort = 'specialty' and c.status = 'active' and s.form in ('10-K', '10-Q'))
+            select y, count(distinct h.accession)::float8 / count(distinct f.accession) from f
+            left join raw.efts_term_hit h on h.accession = f.accession and h.term_key = 'ai'
+            where y in (2019, 2023, %s) group by y""", (yr,)).fetchall())
+        out += ["## People and technology", "",
+                (f"- Median premium per US 401(k) plan participant (a US-headcount proxy from DOL Form 5500), fiscal "
+                 f"{yr}: ${ppe[0] / 1e6:.2f}M across {ppe[1]} active US-based carriers (Bermuda and international "
+                 "groups left out: most of their staff work abroad).")]
+        if gaps:
+            out.append(f"- {sum(g > 0 for g in gaps)} of {len(gaps)} of those carriers grew premium faster than US "
+                       f"plan staff over {yr - 5}–{yr}; median gap {pts(st.median(gaps))} a year (premium growth "
+                       "includes rate increases, so part of the gap is pricing).")
+        if ai:
+            out.append("- Share of active specialty carriers' 10-K and 10-Q filings mentioning artificial "
+                       "intelligence: " + ", ".join(f"{y} {pct(v)}" for y, v in sorted(ai.items())) + ".")
+        out.append("")
+    return out
 
 
 if __name__ == "__main__":

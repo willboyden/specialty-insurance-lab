@@ -1,0 +1,18 @@
+/* Catastrophes section: tile map, metric switch, the documents-pending note. Page tokens only (styles.css). */
+#catastrophes .cat-switch { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; margin: 0 0 8px; }
+#catastrophes .cat-switch .seg { flex-wrap: wrap; }
+#catastrophes .cat-switch .seg button { min-height: 32px; padding: 5px 10px; font-size: 12.5px; }
+svg.chart .cat-code { fill: var(--ink); font-weight: 650; pointer-events: none; }
+svg.chart .cat-tile rect.cat-hot { stroke: var(--ink); stroke-width: 2; }
+#catastrophes .cat-pending { font-size: 13px; color: var(--ink-2); background: var(--surface-2); border-radius: 8px;
+  padding: 12px 14px; max-width: 920px; }
+#catastrophes .cat-pending code { font-family: var(--mono); font-size: 12.5px; }
+#catastrophes .cat-pending p { margin: 0 0 6px; }
+#catastrophes .cat-pending p:last-child { margin-bottom: 0; }
+#catastrophes .cat-fema { font-size: 12px; color: var(--ink-3); margin: 14px 0 0; max-width: 920px; }
+#catastrophes .b-minis { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+@media (max-width: 640px) {
+  #catastrophes .b-minis { grid-template-columns: 1fr; }
+}
+#catastrophes .cat-stack { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+@media (max-width: 640px) { #catastrophes .cat-stack { gap: 12px; } }

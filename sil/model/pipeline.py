@@ -151,9 +151,31 @@ def run(conn, draws: int = 2000, tune: int = 3000, chains: int = 4) -> ModelBund
     dr = loss_model.draws(fit, N_DRAWS)
     shock = loss_model.common_shock(fit)
     inv = investment.estimate(conn, m, end)
-    jump = investment.jump_off(conn, end)
     base = scenarios.baseline_paths(m, end, shock.set_index("qend")["f_mean"], N_DRAWS, feat_mean=mean, feat_sd=sd)
     expo = disclosure_exposures(conn, end)
+    jump, params, order, scen, summaries = _simulations(conn, m, end, fit, dr, shock, inv, base, expo, sd)
+    bundle = ModelBundle(end, mean, sd, panel, fit, diag, dr, shock, inv, jump, base, scen, expo, params, order,
+                         summaries)
+    _store(conn, bundle)
+    log.info("model pipeline done in %.0fs: %s", time.time() - t0, json.dumps(diag))
+    return bundle
+
+
+def resimulate(conn, b: ModelBundle) -> ModelBundle:
+    """Re-run the company simulations on an existing fit (no MCMC): for when only the set of independent,
+    reporting companies changed (sil/status.py). The posterior, drivers and scenarios stay as they were."""
+    t0 = time.time()
+    m = features.macro(conn)
+    jump, params, order, scen, summaries = _simulations(conn, m, b.end, b.fit, b.draws, b.shock, b.inv, b.base,
+                                                        b.exposures, b.feat_sd)
+    out = ModelBundle(b.end, b.feat_mean, b.feat_sd, b.panel, b.fit, b.diag, b.draws, b.shock, b.inv, jump, b.base,
+                      scen, b.exposures, params, order, summaries)
+    log.info("re-simulated %d companies on the stored fit in %.0fs", len(order), time.time() - t0)
+    return out
+
+
+def _simulations(conn, m, end, fit, dr, shock, inv, base, expo, sd):
+    jump = investment.jump_off(conn, end)
     yq = investment.company_panel(conn)
     yields = {cik: g.set_index("qend")["nii_yield"].tail(8) for cik, g in yq.groupby("cik")}
     f_mean = {pd.Timestamp(r.qend): float(r.f_mean) for r in shock.itertuples()}
@@ -180,11 +202,7 @@ def run(conn, draws: int = 2000, tune: int = 3000, chains: int = 4) -> ModelBund
             cik: simulate.summarize(simulate.simulate_company(ci, params[cik], bsim, shock_in, 1.0, overlays_on=False))
             for ci, cik in enumerate(order)
         }}
-    bundle = ModelBundle(end, mean, sd, panel, fit, diag, dr, shock, inv, jump, base, scen, expo, params, order,
-                         summaries)
-    _store(conn, bundle)
-    log.info("model pipeline done in %.0fs: %s", time.time() - t0, json.dumps(diag))
-    return bundle
+    return jump, params, order, scen, summaries
 
 
 def _store(conn, b: ModelBundle) -> None:

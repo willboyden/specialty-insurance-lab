@@ -1,6 +1,10 @@
 """A polite, caching HTTP client.
 
-- Per-host rate limit (SEC asks for at most 10 requests per second; we use 8).
+- Rate limits: every *.sec.gov host shares one budget of 8 requests per second across ALL processes of this
+  project (a lock file under data/cache/.ratelimit/; SEC allows at most 10 per second per client); other
+  hosts have a per-process limit.
+- Identity by host: SEC hosts get the declared client from SIL_SEC_USER_AGENT when it is set (www.sec.gov
+  refuses requests without one); every other host gets the generic client name. The contact never leaves SEC.
 - Retries with exponential backoff on 429, 5xx and network errors.
 - Every response body is cached on disk under data/cache/<host>/ with a small metadata file,
   so a re-run reads the cache instead of the network unless the entry is older than max_age.
@@ -8,6 +12,7 @@
 
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import json
 import logging
@@ -18,17 +23,19 @@ from urllib.parse import urlsplit
 
 import httpx
 
-from .config import CACHE, USER_AGENT
+from .config import CACHE, USER_AGENT, sec_user_agent
 
 log = logging.getLogger(__name__)
 
 HOST_RPS = {
-    "data.sec.gov": 8.0,
-    "efts.sec.gov": 6.0,
-    "www.sec.gov": 8.0,
     "fred.stlouisfed.org": 4.0,
     "www.fema.gov": 4.0,
 }
+SEC_SHARED_RPS = 8.0
+
+
+def is_sec_host(host: str) -> bool:
+    return host == "sec.gov" or host.endswith(".sec.gov")
 
 
 class FetchError(RuntimeError):
@@ -36,10 +43,13 @@ class FetchError(RuntimeError):
 
 
 class Fetcher:
-    def __init__(self, cache_dir: Path = CACHE, user_agent: str = USER_AGENT, timeout: float = 120.0):
+    def __init__(self, cache_dir: Path = CACHE, user_agent: str = USER_AGENT, timeout: float = 120.0,
+                 sec_agent: str | None = None):
         self.cache_dir = cache_dir
+        self.user_agent = user_agent
+        self.sec_agent = sec_agent if sec_agent is not None else sec_user_agent()
         self.client = httpx.Client(
-            headers={"User-Agent": user_agent, "Accept-Encoding": "gzip, deflate"},
+            headers={"Accept-Encoding": "gzip, deflate"},
             timeout=timeout,
             follow_redirects=True,
             http2=False,  # FRED resets HTTP/2 streams; HTTP/1.1 is reliable everywhere
@@ -55,7 +65,35 @@ class Fetcher:
         base = self.cache_dir / host
         return base / key, base / f"{key}.meta.json"
 
+    def _agent(self, host: str) -> str:
+        if is_sec_host(host) and self.sec_agent:
+            return self.sec_agent
+        return self.user_agent
+
+    def _throttle_shared(self, key: str, rps: float) -> None:
+        """One budget across processes: the last request time lives in a lock file under the cache."""
+        lock_dir = self.cache_dir / ".ratelimit"
+        lock_dir.mkdir(parents=True, exist_ok=True)
+        with open(lock_dir / f"{key}.lock", "a+") as fh:
+            fcntl.flock(fh, fcntl.LOCK_EX)
+            try:
+                fh.seek(0)
+                text = fh.read().strip()
+                last = float(text) if text else 0.0
+                wait = last + 1.0 / rps - time.time()
+                if wait > 0:
+                    time.sleep(wait)
+                fh.seek(0)
+                fh.truncate()
+                fh.write(f"{time.time():.6f}")
+                fh.flush()
+            finally:
+                fcntl.flock(fh, fcntl.LOCK_UN)
+
     def _throttle(self, host: str) -> None:
+        if is_sec_host(host):
+            self._throttle_shared("sec.gov", SEC_SHARED_RPS)
+            return
         rps = HOST_RPS.get(host, 2.0)
         with self._lock:
             wait = self._last.get(host, 0.0) + 1.0 / rps - time.monotonic()
@@ -75,12 +113,17 @@ class Fetcher:
                     return None
                 return body_path.read_bytes()
         host = urlsplit(url).netloc
+        if host == "www.sec.gov" and not self.sec_agent:
+            raise FetchError(
+                "www.sec.gov refuses clients that do not declare a contact: set SIL_SEC_USER_AGENT in .env "
+                "(\"<name> <email>\"), see the README"
+            )
         delay = 2.0
         last_error = ""
         for attempt in range(6):
             self._throttle(host)
             try:
-                resp = self.client.get(url)
+                resp = self.client.get(url, headers={"User-Agent": self._agent(host)})
                 self.network_requests += 1
             except httpx.HTTPError as exc:
                 last_error = f"{type(exc).__name__}: {exc}"

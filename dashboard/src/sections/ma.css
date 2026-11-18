@@ -1,0 +1,13 @@
+/* M&A section: the deal-timeline row highlight and the pending-deals list (tokens only, both themes). */
+svg.chart .ma-rowhot { fill: var(--surface-2); }
+.ma-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+.ma-item { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; background: var(--surface); min-width: 0; }
+.ma-item p { margin: 6px 0; font-size: 13px; color: var(--ink-2); overflow-wrap: anywhere; }
+.ma-item p.ma-muted { color: var(--ink-3); }
+.ma-item a { font-size: 13px; }
+.ma-item-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ma-chip { font-size: 11.5px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--border); color: var(--ink-2);
+  background: var(--surface-2); white-space: nowrap; }
+.ma-chip-pending { border-style: dashed; border-color: var(--context-strong); }
+.ma-events { margin: 6px 0 0; padding-left: 18px; font-size: 13px; color: var(--ink-2); }
+.ma-events li { margin: 2px 0; }

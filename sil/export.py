@@ -88,6 +88,9 @@ def _write(name: str, obj) -> int:
     return len(text)
 
 
+write = _write  # the writer the data domains use (sil/domains.py)
+
+
 def run(conn, bundle: P.ModelBundle | None = None) -> dict:
     if bundle is None:
         bundle = P.run(conn)
@@ -152,6 +155,9 @@ def run(conn, bundle: P.ModelBundle | None = None) -> dict:
     latest = q[q["qend"] <= end].sort_values("qend").groupby("cik").tail(1).set_index("cik")
     first_q = q.dropna(subset=["npe"]).groupby("cik")["qend"].min()
     last_q = q.dropna(subset=["npe"]).groupby("cik")["qend"].max()
+    listing = _frame(conn, "select cik, derived, pending_since, pending_forms, last_change_of_control,"
+                           " last_delisting, last_deregistration, checked_on from core.company_status")
+    listing = listing.set_index("cik") if len(listing) else listing
     companies = []
     for r in comp.itertuples():
         s = sec[sec.cik == r.cik]
@@ -169,6 +175,16 @@ def run(conn, bundle: P.ModelBundle | None = None) -> dict:
             "firstQuarter": first_q.get(r.cik).strftime("%Y-%m-%d") if r.cik in first_q.index else None,
             "lastQuarter": last_q.get(r.cik).strftime("%Y-%m-%d") if r.cik in last_q.index else None,
         }
+        if len(listing) and r.cik in listing.index:
+            st = listing.loc[r.cik]
+            rec["listing"] = {
+                "derived": st.derived, "checkedOn": str(st.checked_on),
+                "pendingSince": str(st.pending_since) if st.pending_since else None,
+                "pendingForms": st.pending_forms or None,
+                "lastChangeOfControl": str(st.last_change_of_control) if st.last_change_of_control else None,
+                "lastDelisting": str(st.last_delisting) if st.last_delisting else None,
+                "lastDeregistration": str(st.last_deregistration) if st.last_deregistration else None,
+            }
         f = fy[fy.cik == r.cik]
         rec["filingsByYear"] = {
             str(int(y)): {k: int(n) for k, n in zip(g.kind, g.n)} for y, g in f.groupby("y")
@@ -306,4 +322,15 @@ def run(conn, bundle: P.ModelBundle | None = None) -> dict:
                   "first": b.panel.qend.min().strftime("%Y-%m-%d"), "last": b.panel.qend.max().strftime("%Y-%m-%d")},
         "diagnostics": b.diag,
     })
+
+    # ---------------------------------------------------------------- data domains (claims, catastrophe, ...)
+    from . import domains
+
+    if os.environ.get("SIL_SKIP_DOMAINS") == "1":
+        return sizes
+    def recorded(name: str, obj) -> int:
+        sizes[name.removesuffix(".json")] = n = _write(name, obj)
+        return n
+
+    domains.export(conn, recorded)
     return sizes

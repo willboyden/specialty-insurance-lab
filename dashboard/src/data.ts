@@ -1,5 +1,9 @@
 // Loading the exported JSON, the metric registry, and small helpers over the panel.
 import type { AppData, Backtest, Company, Disclosure, Macro, Meta, ModelData, Num, Panel } from "./types";
+import type { ClaimsData } from "./domains/claims";
+import type { CatastropheData } from "./domains/catastrophe";
+import type { PeopleData } from "./domains/people";
+import type { MaData } from "./domains/ma";
 import type { MetricKey } from "./state";
 import { money, pct, pts, times } from "./format";
 
@@ -11,11 +15,18 @@ async function getJson<T>(name: string, optional = false): Promise<T | null> {
     if (optional) return null;
     throw new Error(`could not load ${name}: HTTP ${res.status}`);
   }
-  return (await res.json()) as T;
+  // a dev server answers a missing file with the page itself (200, text/html): an optional file is then absent
+  if (optional && !(res.headers.get("content-type") ?? "").includes("json")) return null;
+  try {
+    return (await res.json()) as T;
+  } catch (err) {
+    if (optional) return null;
+    throw err;
+  }
 }
 
 export async function loadAll(): Promise<AppData> {
-  const [meta, companies, panel, macro, disclosure, model, backtest] = await Promise.all([
+  const [meta, companies, panel, macro, disclosure, model, backtest, claims, catastrophe, people, ma] = await Promise.all([
     getJson<Meta>("meta.json"),
     getJson<Company[]>("companies.json"),
     getJson<Panel>("panel.json"),
@@ -23,6 +34,10 @@ export async function loadAll(): Promise<AppData> {
     getJson<Disclosure>("disclosure.json"),
     getJson<ModelData>("model.json"),
     getJson<Backtest>("backtest.json", true),
+    getJson<ClaimsData>("claims.json", true),
+    getJson<CatastropheData>("catastrophe.json", true),
+    getJson<PeopleData>("people.json", true),
+    getJson<MaData>("ma.json", true),
   ]);
   const list = (companies ?? []).filter((c) => c.cohort !== "ai_indicator");
   return {
@@ -34,6 +49,10 @@ export async function loadAll(): Promise<AppData> {
     disclosure: disclosure!,
     model: model!,
     backtest,
+    claims,
+    catastrophe,
+    people,
+    ma,
   };
 }
 

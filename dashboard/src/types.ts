@@ -1,3 +1,7 @@
+import type { ClaimsData } from "./domains/claims";
+import type { CatastropheData } from "./domains/catastrophe";
+import type { PeopleData } from "./domains/people";
+import type { MaData } from "./domains/ma";
 // Shapes of the JSON files written by sil/export.py (dashboard/public/data/).
 
 export type Num = number | null;
@@ -31,6 +35,16 @@ export interface Company {
   /** filings per calendar year by kind: annual, quarterly, current, proxy, insider, other */
   filingsByYear?: Record<string, Record<string, number>>;
   recentFilings?: { form: string; filed: string; period: string | null; url: string }[];
+  /** listing status as the SEC filing record shows it (sil/status.py); "pending" = a deal document filed */
+  listing?: {
+    derived: "active" | "pending" | "inactive";
+    checkedOn: string;
+    pendingSince: string | null;
+    pendingForms: string | null;
+    lastChangeOfControl: string | null;
+    lastDelisting: string | null;
+    lastDeregistration: string | null;
+  };
 }
 
 export interface Panel {
@@ -199,4 +213,9 @@ export interface AppData {
   disclosure: Disclosure;
   model: ModelData;
   backtest: Backtest | null;
+  // data domains (optional files: a section shows what exists)
+  claims: ClaimsData | null;
+  catastrophe: CatastropheData | null;
+  people: PeopleData | null;
+  ma: MaData | null;
 }

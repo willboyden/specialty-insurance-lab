@@ -14,7 +14,7 @@ MIGRATIONS = ROOT / "db" / "migrations"
 VIEWS = ROOT / "db" / "views"
 EXPORT_DIR = ROOT / "dashboard" / "public" / "data"
 
-# A generic client name. SEC's data.sec.gov and efts.sec.gov accept it; nothing personal is sent.
+# A generic client name, sent to every host except SEC's when a SEC contact is configured.
 USER_AGENT = os.environ.get("SIL_USER_AGENT", "specialty-insurance-research/0.1")
 
 
@@ -29,6 +29,18 @@ def load_env() -> None:
             continue
         key, _, value = line.partition("=")
         os.environ.setdefault(key.strip(), value.strip())
+
+
+def sec_user_agent() -> str | None:
+    """The declared client for *.sec.gov hosts, from SIL_SEC_USER_AGENT in .env ("<name> <email>").
+
+    SEC's fair-access rule requires a name and a contact email on www.sec.gov (the filing documents);
+    data.sec.gov and efts.sec.gov also accept the generic name. This value is sent only to SEC hosts
+    and never printed or written anywhere but .env.
+    """
+    load_env()
+    value = os.environ.get("SIL_SEC_USER_AGENT", "").strip().strip('"').strip("'")
+    return value or None
 
 
 def dsn() -> str:

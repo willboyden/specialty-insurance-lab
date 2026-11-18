@@ -1,0 +1,5 @@
+/* People and technology section: only what the shared styles do not cover. Page tokens only. */
+#people .p-note { margin: 2px 0 10px; max-width: 72ch; }
+#people .p-tiles { margin: 4px 0 18px; }
+#people .p-tiles .tile .t-value { font-size: 22px; }
+#people .seg button:disabled { color: var(--muted); cursor: not-allowed; }

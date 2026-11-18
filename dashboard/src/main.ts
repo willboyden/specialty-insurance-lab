@@ -12,6 +12,10 @@ import { mountDisclosures } from "./sections/disclosures";
 import { mountStress } from "./sections/stress";
 import { mountBacktest } from "./sections/backtest";
 import { mountMethods } from "./sections/methods";
+import { claimsSection } from "./sections/claims";
+import { catastropheSection } from "./sections/catastrophes";
+import { maSection } from "./sections/ma";
+import { peopleSection } from "./sections/people";
 
 export interface SectionDef {
   id: string;
@@ -38,6 +42,10 @@ const SECTIONS: SectionDef[] = [
     intro: "Where the selected carrier's combined ratio comes from (current-year losses, reserve development and "
       + "expenses), what the model estimates about its sensitivities, and its filing record.",
   },
+  claimsSection,
+  catastropheSection,
+  maSection,
+  peopleSection,
   {
     id: "drivers", nav: "Risk drivers", title: "Risk drivers: catastrophes, geopolitics, the AI cycle, inflation", mount: mountDrivers,
     intro: "The forces the scenarios lean on, from public sources. The industry shock is not an input: the model "
@@ -85,11 +93,16 @@ function header(data: AppData): HTMLElement {
       el("div", { class: "byline" },
         el("span", { text: `Financials through ${quarterLabel(m.dataThrough)}` }),
         el("span", { text: `Last filing read ${m.xbrl.lastFiled}` }),
+        ...(checkedOn(data) ? [el("span", { text: `Statuses checked ${checkedOn(data)}` })] : []),
         el("span", { text: `Built ${m.built}` }),
         el("a", { href: "https://github.com/willboyden/specialty-insurance-lab", text: "Source code" }),
       ),
     ),
   );
+}
+
+function checkedOn(data: AppData): string | null {
+  return data.companies.find((c) => c.listing)?.listing?.checkedOn ?? null;
 }
 
 function controls(data: AppData, store: Store): HTMLElement {
@@ -203,11 +216,22 @@ async function start() {
       inner.append(el("p", { class: "empty", text: "This section could not be drawn." }));
     }
   }
+  const loaded = (prefix: string) => data.meta.sources.find((x) => x.source.startsWith(prefix))?.loaded;
+  const femaCite = [
+    `Disaster Declarations Summaries v2 (https://www.fema.gov/api/open/v2/DisasterDeclarationsSummaries, retrieved ${loaded("fema") ?? "–"})`,
+    ...(loaded("openfema_nfip") ? [`FIMA NFIP Redacted Claims v3 (https://www.fema.gov/api/open/v3/NfipClaims, retrieved ${loaded("openfema_nfip")})`] : []),
+  ].join("; ");
   app.append(el("footer", { class: "site" }, el("div", { class: "wrap" },
-    el("p", { text: "Data: SEC EDGAR (XBRL company facts, submissions, full-text search), FRED (BLS, BEA, Treasury, "
-      + "EIA, Chicago Fed series), Caldara-Iacoviello Geopolitical Risk index, Baker-Bloom-Davis Economic Policy "
-      + "Uncertainty, NOAA NCEI, OpenFEMA. Public data; not investment advice. Scenario results are hypothetical stress "
+    el("p", { text: "Data: SEC EDGAR (XBRL company facts, submissions, full-text search"
+      + (data.meta.sources.some((x) => x.source.startsWith("sec_document")) ? ", filing documents" : "") + "); FRED "
+      + "(BLS, BEA, Treasury, EIA, Chicago Fed series); Caldara-Iacoviello Geopolitical Risk index; Baker-Bloom-Davis "
+      + "Economic Policy Uncertainty; NOAA (NCEI, National Hurricane Center HURDAT2, Storm Prediction Center, Climate "
+      + "Prediction Center); USGS earthquake catalog; National Interagency Fire Center; U.S. Department of Labor Form 5500 "
+      + `datasets; OpenFEMA: ${femaCite}. Public data; not investment advice. Scenario results are hypothetical stress `
       + "tests, not predictions." }),
+    el("p", { text: "This product uses the Federal Emergency Management Agency's OpenFEMA API, but is not endorsed by "
+      + "FEMA. The Federal Government or FEMA cannot vouch for the data or analyses derived from these data after the "
+      + "data have been retrieved from the Agency's website(s)." }),
   )));
 
   // highlight the section in view

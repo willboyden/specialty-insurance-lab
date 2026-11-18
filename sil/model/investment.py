@@ -111,5 +111,9 @@ def jump_off(conn, end: pd.Timestamp) -> pd.DataFrame:
     lr_hist = q.dropna(subset=["loss_ratio"]).sort_values("qend").groupby("cik")
     s["last_lrs"] = lr_hist["loss_ratio"].apply(lambda x: list(x.tail(4)))
     s["last_lr_q"] = lr_hist["qend"].apply(lambda x: list(x.tail(4)))
-    s["active"] = s["last_qend"] >= end - pd.Timedelta(days=200)
+    # independent and still reporting: recent data AND a filing record that says active (sil/status.py), so a
+    # company acquired after its last 10-Q is not simulated forward from a stale jump-off
+    from ..status import active_ciks
+
+    s["active"] = (s["last_qend"] >= end - pd.Timedelta(days=200)) & s.index.isin(sorted(active_ciks(conn)))
     return s
