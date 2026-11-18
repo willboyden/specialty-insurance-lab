@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-lsruyWExKVX9vwMozLtrhpfj2WseCZpUQoToLggct/w='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'" />
+    <title>Specialty Insurance Stress Lab</title>
+    <meta
+      name="description"
+      content="US specialty insurers from public SEC filings: underwriting results, risk drivers, disclosure trends and Bayesian stress scenarios for AI, geopolitical, climate and social-inflation shocks."
+    />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232a78d6'/%3E%3Cpath d='M7 22 L13 15 L18 19 L25 9' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
+    <script>
+      // apply the saved theme before first paint (no flash)
+      try {
+        var t = localStorage.getItem("sil.theme");
+        if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to the dashboard</a>
+    <div id="app"><p class="loading">Loading public filings data…</p></div>
+    <noscript><p class="loading">This dashboard needs JavaScript to draw its charts.</p></noscript>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
