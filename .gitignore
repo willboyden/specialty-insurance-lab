@@ -1,0 +1,14 @@
+# secrets: the database password lives here (umask 077, never committed)
+.env
+# downloaded raw files and anything else local (re-fetchable)
+/data/
+# python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+# dashboard build
+dashboard/node_modules/
+dashboard/dist/
+logs/

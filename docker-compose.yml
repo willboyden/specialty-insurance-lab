@@ -1,0 +1,29 @@
+# Postgres for the specialty-insurance lab.
+# - Image pinned by digest (the postgres:17 image, 17.10 at the time of writing).
+# - Listens on loopback only (127.0.0.1:5544); never on the LAN.
+# - The password comes from .env (created by scripts/init-env.sh, mode 600, gitignored).
+name: sil
+services:
+  postgres:
+    image: postgres@sha256:5c855ad7b85e68e48a62f34662853f38b57c1c1d80f3a927ab58034fd6d31c5e
+    container_name: sil-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: insurance
+      POSTGRES_USER: sil
+      POSTGRES_PASSWORD: ${SIL_PG_PASSWORD:?run scripts/init-env.sh first}
+    ports:
+      - "127.0.0.1:5544:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    shm_size: 256mb
+    # The default bridge network: works even where Docker has no free address pools for a new network.
+    network_mode: bridge
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sil -d insurance"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+volumes:
+  pgdata:
+    name: sil-pgdata
