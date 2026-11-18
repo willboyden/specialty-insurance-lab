@@ -85,8 +85,11 @@ export function triangleHeat(o: {
             { name: "Change vs first estimate", value: c === 0 ? "first estimate" : o.change(dev[r][c] as number) },
           ];
           if (paid != null) rows.push({ name: "Paid, cumulative", value: o.money(paid) }, { name: "Paid / incurred", value: o.ratio(paid / inc) });
+          // salvage and subrogation can put paid slightly above incurred; far above, the filing's tables disagree
+          const odd = paid != null && inc > 0 && paid > 1.1 * inc;
           showTip(ev.clientX, ev.clientY, `Accident year ${line.ays[r]}, development year ${c + 1}`, rows,
-            `Evaluated at the end of ${line.ays[r] + c}`);
+            `Evaluated at the end of ${line.ays[r] + c}` + (odd ? ". As filed: paid is more than 10% above incurred here, so"
+              + " the company's paid and incurred tables disagree for this accident year" : ""));
         })
         .on("pointerleave", hideTip);
     });

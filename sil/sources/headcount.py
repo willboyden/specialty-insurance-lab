@@ -44,6 +44,9 @@ PATTERNS: list[tuple[str, re.Pattern]] = [
 HEADING = re.compile(
     r"(?im)^[ \t|]*(?:item\s*1\.?\s*[-–—:]?\s*)?(?:human capital(?: resources| management)?|employees(?: and human"
     r" capital)?|our employees|our people|personnel|workforce|our workforce|team members)\b[ \t]*[.:—–-]?"
+    # a heading, not the start of a sentence ("Our employees handle nearly all claims"): the line ends, or the next
+    # word is capitalized, or punctuation closed the heading
+    r"(?=[ \t]*$|[ \t]*(?-i:[A-Z(\d])|(?<=[.:—–-]))"
 )
 SENTENCE_END = re.compile(r"(?<=[.;])\s+(?=[A-Z(])|\n")
 MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"]
@@ -59,6 +62,8 @@ class Headcount:
     as_of: date | None
     snippet: str | None
     method: str
+    insurance: int | None = None  # the insurance operations' staff, when a group states it beside its total
+    insurance_basis: str | None = None
 
 
 def _int(s: str) -> int:
@@ -90,10 +95,32 @@ def _plausible(n: int, snippet: str) -> bool:
     return not (1900 <= n <= 2100 and f"{n:,}" not in snippet and re.search(rf"\b(in|since|during|of)\s+{n}\b", snippet))
 
 
+NOT_A_COUNT_AFTER = re.compile(r"\s*(?:years?\b|%|percent|per\s+cent)", re.IGNORECASE)
+# the words before the number: an age or tenure, a change in staff ("staff reductions of approximately 150
+# employees", "we hired 300 employees"), or the insureds' own staff ("risks with more than 50 employees")
+NOT_A_COUNT_BEFORE = re.compile(
+    r"(?:average|median)\s+(?:age|tenure|length)|tenure|aged?\b"
+    r"|reductions?\s+(?:of|in)|reduc(?:e|ed|ing)\b|eliminat\w*|lay(?:ing)?[- ]?offs?\b|laid\s+off|severance|terminat\w*"
+    r"|\bhir(?:ed|ing|es)\b|recruit\w*|\badded\b|increase\s+of|decrease\s+of|affect(?:ed|ing)\b"
+    r"|(?:risks|insureds|employers|businesses|companies|accounts|policyholders|clients|customers|firms)\s+(?:with|having|that\s+have)\b",
+    re.IGNORECASE)
+# after the noun: a part of the company, not all of it ("89 employees in our underwriting department")
+SUBGROUP_AFTER = re.compile(r"\s+(?:in|within|of)\s+(?:our|the|its)\s+(?:[\w-]+\s+){0,3}?"
+                            r"(?:depar\w*|unit|division|team|function|office|branch)s?\b", re.IGNORECASE)
+
+
 def _search(text: str, method_prefix: str, patterns=PATTERNS) -> Headcount | None:
     for name, rx in patterns:
         for m in rx.finditer(text):
             n = _int(m.group(1))
+            # "the average age of our workforce is 41 years", "workforce of 45% women": not a headcount
+            if NOT_A_COUNT_AFTER.match(text, m.end(1)) or NOT_A_COUNT_BEFORE.search(text[max(0, m.start() - 60):m.start(1)]):
+                continue
+            if SUBGROUP_AFTER.match(text, m.end()):
+                continue
+            # a range describes others ("partner MGAs with ... a headcount of 15 to 30 employees"), not the company
+            if re.match(r"\s*(?:to|-|–)\s*\d", text[m.end(1):m.end(1) + 8]):
+                continue
             snippet = _sentence(text, m.start(), m.end())
             if re.search(r"\b(part[- ]time|temporary|contractors?|agents?)\s*$", text[m.start():m.end()], re.IGNORECASE):
                 continue
@@ -109,17 +136,63 @@ def _search(text: str, method_prefix: str, patterns=PATTERNS) -> Headcount | Non
     return None
 
 
+# groups that also run non-insurance businesses state their insurance staff beside the total
+_INSURANCE_STATED = [
+    # Markel: "of whom approximately 5,600 were employed within our insurance operations"
+    re.compile(rf"of\s+whom\s+(?:{QUAL})*{NUM}\s+were\s+employed\s+(?:with)?in\s+our\s+insurance\s+operations",
+               re.IGNORECASE),
+    # Alleghany's table: "Total reinsurance and insurance subsidiaries | 1,439"
+    re.compile(rf"total\s+reinsurance\s+and\s+insurance\s+subsidiaries[\s|]*{NUM}\b", re.IGNORECASE),
+]
+# Alleghany's sentence: "636 persons employed at TransRe, 778 persons employed at our insurance operating units"
+_INSURANCE_SUM = re.compile(rf"{NUM}\s+persons\s+employed\s+at\s+TransRe,?\s+{NUM}\s+persons\s+employed\s+at\s+"
+                            r"our\s+insurance\s+operating\s+units", re.IGNORECASE)
+# Markel 2019: "of whom approximately 14,000 were employed within our Markel Ventures operations"
+_NON_INSURANCE = re.compile(rf"of\s+whom\s+(?:{QUAL})*{NUM}\s+were\s+employed\s+(?:with)?in\s+our\s+"
+                            r"(?:markel\s+ventures|non-insurance)\s+operations", re.IGNORECASE)
+
+
+def insurance_staff(text: str, total: int | None) -> tuple[int | None, str | None]:
+    """The insurance operations' staff of a group that states it (or states its non-insurance staff)."""
+    for rx in _INSURANCE_STATED:
+        m = rx.search(text)
+        if m and (total is None or _int(m.group(1)) <= total):
+            return _int(m.group(1)), "insurance operations, as stated"
+    m = _INSURANCE_SUM.search(text)
+    if m:
+        return _int(m.group(1)) + _int(m.group(2)), "reinsurance and insurance subsidiaries, as stated"
+    m = _NON_INSURANCE.search(text)
+    if m and total is not None and _int(m.group(1)) < total:
+        return total - _int(m.group(1)), "group total less the stated non-insurance staff"
+    return None, None
+
+
 def extract_headcount(text: str) -> Headcount:
+    """The reported workforce of a 10-K's text, with the insurance operations' staff where a group states them."""
+    hc = _extract_total(text)
+    hc.insurance, hc.insurance_basis = insurance_staff(text, hc.employees)
+    return hc
+
+
+def _extract_total(text: str) -> Headcount:
     """The reported workforce of a 10-K's text (plain text, see sec_docs.html_to_text)."""
-    # 1) the Employees / Human Capital section: the 3,000 characters after each such heading
-    for h in HEADING.finditer(text):
-        window = text[h.start():h.start() + 3000]
-        found = _search(window, "section")
-        if found:
-            return found
-    # 2) anywhere, but only the explicit "we had/employed N employees" wording
+    # 1) the Employees / Human Capital sections: the 3,000 characters after each such heading. The explicit wordings
+    # ("we had N employees") are tried in every section before the looser "approximately N staff", which can be a
+    # subgroup ("about 190 staff field adjusters" in a claims section ahead of the total in Human Capital)
+    windows = [text[h.start():h.start() + 3000] for h in HEADING.finditer(text)]
     strict = [(n, rx) for n, rx in PATTERNS if n != "qualified-count-noun"]
-    for m in re.finditer(r"\b(?:we|the company|the group|our (?:company|subsidiaries))\b", text, re.IGNORECASE):
+    loose = [(n, rx) for n, rx in PATTERNS if n == "qualified-count-noun"]
+    for pats in (strict, loose):
+        for window in windows:
+            found = _search(window, "section", pats)
+            if found:
+                return found
+    # 2) anywhere, but only the explicit "we had/employed N employees" wording
+    # (a group that states its insurance operations' staff: "AFG’s property and casualty insurance operations had
+    # approximately 6,500 employees"; its other segments' staff are not insurance staff)
+    for m in re.finditer(r"\b(?:we|the company|the group|our (?:company|subsidiaries))\b"
+                         r"|\b[A-Z][A-Za-z]{1,8}[’']s\s+(?:property\s+and\s+casualty\s+)?insurance\s+operations\b",
+                         text, re.IGNORECASE):
         window = text[m.start():m.start() + 220]
         found = _search(window, "document", strict)
         if found and re.search(r"employ|workforce|headcount", found.snippet or "", re.IGNORECASE):
@@ -185,9 +258,10 @@ def ingest(conn, fetcher: Fetcher) -> None:
             counts, words = tech_counts(text)
             conn.execute(
                 "insert into raw.headcount_10k(accession, cik, form, filing_date, fiscal_year, employees, full_time,"
-                " as_of, snippet, method, doc_url) values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
-                " on conflict (accession) do nothing",
-                (acc, cik, form, fdate, fy, hc.employees, hc.full_time, hc.as_of, hc.snippet, hc.method, url),
+                " as_of, snippet, method, doc_url, insurance_employees, insurance_basis)"
+                " values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) on conflict (accession) do nothing",
+                (acc, cik, form, fdate, fy, hc.employees, hc.full_time, hc.as_of, hc.snippet, hc.method, url,
+                 hc.insurance, hc.insurance_basis),
             )
             conn.execute("delete from raw.tech_terms_10k where accession = %s", (acc,))
             copy_rows(conn, "raw.tech_terms_10k", ("accession", "cik", "fiscal_year", "term_key", "n", "words"),

@@ -163,16 +163,28 @@ def plan_participants(conn) -> dict[tuple[int, int], tuple[int, int, list[str]]]
 def reported_headcount(conn) -> dict[tuple[int, int], dict]:
     """(cik, fiscal year) -> the 10-K headcount (an original report wins over an amendment)."""
     out: dict[tuple[int, int], dict] = {}
-    for acc, cik, form, fdate, fy, emp, full, as_of, snippet, method, url in conn.execute(
+    for acc, cik, form, fdate, fy, emp, full, as_of, snippet, method, url, ins, ins_basis in conn.execute(
         """select accession, cik, form, filing_date, fiscal_year, employees, full_time, as_of, snippet, method,
-                  doc_url
+                  doc_url, insurance_employees, insurance_basis
            from raw.headcount_10k where employees is not null
            order by cik, fiscal_year, (form like '%%/A') desc, filing_date"""
     ):
         out[(cik, fy)] = {"employees": emp, "fullTime": full, "asOf": as_of.isoformat() if as_of else None,
                           "snippet": snippet, "method": method, "url": url, "accession": acc, "filed": str(fdate),
-                          "form": form}
+                          "form": form, "insurance": ins, "insuranceBasis": ins_basis}
     return out
+
+
+def insurance_headcount(heads: dict[tuple[int, int], dict]) -> tuple[dict[tuple[int, int], int | None], set[int]]:
+    """(cik, fy) -> the staff count per-employee measures use, and the groups with non-insurance businesses.
+
+    A group that states its insurance operations' staff in any year (Markel, Alleghany) is measured by that count;
+    its years without one are left out rather than measured by a total that includes, say, Markel Ventures."""
+    groups = {cik for (cik, _fy), h in heads.items() if h.get("insurance") is not None}
+    out = {}
+    for (cik, fy), h in heads.items():
+        out[(cik, fy)] = h["insurance"] if cik in groups else h["employees"]
+    return out, groups
 
 
 def build(conn) -> dict:
@@ -183,6 +195,7 @@ def build(conn) -> dict:
     status = {c.cik: (c.status, c.status_year) for c in COMPANIES}
     plans = plan_participants(conn)
     heads = reported_headcount(conn)
+    staff, _groups = insurance_headcount(heads)
     tags = sorted({t for ts in XBRL_TAGS.values() for t in ts})
     x = _annual_xbrl(conn, tags)
 
@@ -207,15 +220,16 @@ def build(conn) -> dict:
             None if ppe is None and dev is None else (ppe or 0.0) + (dev or 0.0))
         software = first(cik, fy, "software_add")
         rows.append((
-            cik, fy, head["employees"] if head else None, plan[0] if plan else None, plan[1] if plan else None,
+            cik, fy, staff.get((cik, fy)), plan[0] if plan else None, plan[1] if plan else None,
             npe, er * npe if er is not None else None, first(cik, fy, "sbc"), first(cik, fy, "dc_cost"),
             first(cik, fy, "labor"), capex, software if software is not None else dev, None,
+            head["employees"] if head else None,
         ))
     conn.execute("delete from core.people_year")
     n = copy_rows(conn, "core.people_year",
                   ("cik", "fiscal_year", "employees_reported", "us_plan_active", "us_plan_count", "npe", "uw_expense",
                    "share_based_comp", "dc_plan_cost", "labor_expense", "capex", "software_capitalized",
-                   "software_net"), rows)
+                   "software_net", "employees_total"), rows)
     conn.commit()
     with_plan = sum(1 for r in rows if r[3] is not None)
     with_head = sum(1 for r in rows if r[2] is not None)
@@ -319,14 +333,15 @@ def export(conn, write) -> None:
     years = list(range(FIRST_YEAR, this_year))  # complete fiscal years
     tech_years = list(range(2010, this_year + 1))  # filing years; the current one is to date
     people = defaultdict(dict)
-    for (cik, fy, emp, plan, nplans, npe, uw, sbc, dc, labor, capex, sw) in conn.execute(
+    for (cik, fy, emp, plan, nplans, npe, uw, sbc, dc, labor, capex, sw, total) in conn.execute(
         """select cik, fiscal_year, employees_reported, us_plan_active, us_plan_count, npe, uw_expense,
-                  share_based_comp, dc_plan_cost, labor_expense, capex, software_capitalized
+                  share_based_comp, dc_plan_cost, labor_expense, capex, software_capitalized, employees_total
            from core.people_year"""
     ):
-        people[cik][fy] = (emp, plan, nplans, npe, uw, sbc, dc, labor, capex, sw)
+        people[cik][fy] = (emp, plan, nplans, npe, uw, sbc, dc, labor, capex, sw, total)
     plans = plan_participants(conn)
     heads = reported_headcount(conn)
+    _staff, groups = insurance_headcount(heads)
     tech, themes = _tech(conn, tech_years)
     companies = {}
     for c in COMPANIES:
@@ -342,6 +357,9 @@ def export(conn, write) -> None:
         companies[str(c.cik)] = {
             "employees": col(0), "plan": col(1), "plans": col(2), "npe": col(3), "uwExpense": col(4), "sbc": col(5),
             "dcCost": col(6), "labor": col(7), "capex": col(8), "software": col(9),
+            # groups with non-insurance businesses: "employees" is the insurance operations' staff, this the total
+            "employeesTotal": col(10) if c.cik in groups else None,
+            "employeesBasis": "insurance operations" if c.cik in groups else "company",
             "sponsors": sponsors, "headcountSources": src[-3:],
             "tech": tech.get(str(c.cik)),
         }

@@ -42,9 +42,20 @@ it. Per company and plan year the section sums the active participants of its 40
   they are never stored.
 
 **Reported headcount.** `sil/sources/headcount.py` reads each 10-K's Employees / Human Capital paragraph ("As of
-December 31, 2024, we had approximately 2,550 employees"), first under those headings, then anywhere with stricter
-wording, keeps the sentence it read the number from (shown in the data as `snippet`), and refuses numbers outside 5
-to 400,000.
+December 31, 2024, we had approximately 2,550 employees"), first under those headings (a heading line, not a sentence
+that starts "Our employees handle ..."), the explicit wordings ("we had N employees") in every such section before the
+looser "approximately N staff" anywhere, then anywhere with stricter wording; it keeps the sentence it read the number
+from (shown in the data as `snippet`) and refuses numbers outside 5 to 400,000. Not a headcount: an age or tenure
+("the average age of our workforce is 41 years"), a change in staff ("staff reductions of approximately 150
+employees"), a department ("89 employees in our underwriting department") or the insureds' staff ("risks with more
+than 50 employees"). A group with non-insurance businesses is measured by the insurance staff its 10-K states
+("of whom approximately 5,600 were employed within our insurance operations": Markel; Alleghany's "Total reinsurance
+and insurance subsidiaries" table row), and its years without that split are left out of per-employee views.
+
+How it was checked: every year-to-year jump beyond 2.5x was read (the ones left are real: PXRE becoming Argo in
+2007, St. Paul becoming Travelers in 2004, Third Point Re becoming SiriusPoint in 2021), and random samples of the
+extracted sentences were read by hand (16 of 16 right for fiscal 2009 on after the fixes). Specialty 10-Ks of fiscal
+2009 on give a number in 431 of 447 cases; Validus states its staff only in a table by location, and Accelerant as "574 ... Exchange Services, Underwriting and Corporate employees ... and an additional 288 Mission employees"; both are missing.
 
 **Per-employee views.** Premium per employee is net premiums earned over staff. With the US-plan measure the
 Bermuda and international groups are left out of the per-employee views (most of their staff work outside the US);
@@ -70,4 +81,4 @@ that year. The general AI theme reuses the core search (`raw.efts_term_hit`, rea
 - SiriusPoint: no plan filing found for 2022. AFG: until the 2021 sale of the annuity business its 401(k) plan also
   covered annuity staff.
 - The proxy misses staff outside the US and new hires not yet eligible; it is labelled as a proxy everywhere.
-- Reported 10-K headcount is empty until the filing documents are downloaded (they need a declared SEC contact).
+- Reported 10-K headcount is worldwide and as each company words it (employees, associates, full-time equivalents).

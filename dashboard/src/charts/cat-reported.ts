@@ -18,7 +18,7 @@ export interface ReportedOpts {
   ratio: Num[];
   usd: Num[];
   model: Num[] | null;
-  basis: string[];
+  basis: (string | null)[];
 }
 
 export function reportedChart(o: ReportedOpts): () => void {
@@ -38,7 +38,7 @@ export function reportedChart(o: ReportedOpts): () => void {
       if (o.model) f.g.append("path").attr("class", "line").style("stroke", "var(--s2)").attr("d", lineOf(o.model)(idx) ?? "");
       f.g.append("path").attr("class", "line").style("stroke", "var(--s1)").attr("d", lineOf(o.ratio)(idx) ?? "");
       f.g.selectAll("circle.rep").data(idx.filter((i) => o.ratio[i] != null)).join("circle").attr("class", "dot rep")
-        .attr("r", 3).attr("cx", (i) => x(dates[i])).attr("cy", (i) => y(o.ratio[i] as number)).style("fill", "var(--s1)");
+        .attr("r", 4).attr("cx", (i) => x(dates[i])).attr("cy", (i) => y(o.ratio[i] as number)).style("fill", "var(--s1)");
       const cross = f.g.append("g").attr("class", "crosshair").style("display", "none");
       const vline = cross.append("line").attr("y1", 0).attr("y2", f.height);
       const unsub = o.store.on(["hoverQuarter"], (st) => {

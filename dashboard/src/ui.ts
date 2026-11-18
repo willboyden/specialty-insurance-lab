@@ -103,13 +103,15 @@ export function table(spec: TableSpec): HTMLTableElement {
 }
 
 // ---------------------------------------------------------------- legend
-export type KeyShape = "line" | "box" | "dot";
+// outline / ring: a dashed border in the given color (pending marks), the others a filled swatch
+export type KeyShape = "line" | "box" | "dot" | "outline" | "ring";
 
 export function legend(host: HTMLElement, items: { label: string; color: string; shape?: KeyShape; dash?: boolean }[]) {
   host.replaceChildren();
   for (const it of items) {
     const sw = el("span", { class: `swatch-${it.shape ?? "line"}`, "aria-hidden": "true" });
-    sw.style.background = it.color;
+    if (it.shape === "outline" || it.shape === "ring") sw.style.borderColor = it.color;
+    else sw.style.background = it.color;
     host.append(el("span", { class: "key" }, sw, el("span", { text: it.label })));
   }
 }

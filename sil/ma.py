@@ -194,7 +194,7 @@ def ingest_checks(conn, fetcher: Fetcher) -> None:
         rows = []
         failed = 0
         for deal in DEALS:
-            if deal.pending:
+            if not checks_for(deal):
                 continue
             cik = ciks[deal.ticker]
             a = anchors(conn, cik, deal)
@@ -295,6 +295,18 @@ def _shares(conn, cik: int, announced: date) -> tuple[float, date, str] | None:
     bs = _fact_at(conn, cik, ("CommonStockSharesOutstanding",), announced, 200)
     if bs:
         return bs[0], bs[1], "common shares outstanding on the last balance sheet before the announcement"
+    # several share classes, each counted only in dimensional facts (Accelerant): the weighted-average basic shares
+    # of the last quarter before the announcement, which cover every class
+    wa = conn.execute(
+        "select value, period_end from raw.xbrl_fact where cik = %s and taxonomy = 'us-gaap'"
+        " and tag = 'WeightedAverageNumberOfSharesOutstandingBasic' and period_start is not null"
+        " and period_end - period_start between 80 and 100 and period_end < %s and period_end >= %s"
+        " order by period_end desc, filed desc limit 1",
+        (cik, announced, announced - timedelta(days=200)),
+    ).fetchone()
+    if wa:
+        return float(wa[0]), wa[1], ("weighted-average basic shares of the last quarter before the announcement (the"
+                                     " share classes are counted only separately in the XBRL facts)")
     return None
 
 
@@ -495,7 +507,7 @@ def build(conn) -> dict:
     ciks = dict(conn.execute("select ticker, cik from ref.company"))
     _load_ref(conn, ciks)
     checks = _checks(conn)
-    docs = deal_docs.facts_by_deal(conn)
+    docs: dict[str, dict] = {}  # filled per deal below, once its announcement date is known
     pending_now = {r[0] for r in conn.execute("select cik from core.company_status where derived = 'pending'")}
     deal_rows = []
     closings: dict[int, list[tuple[date, str]]] = {}
@@ -529,9 +541,10 @@ def build(conn) -> dict:
             log.warning("deal %s is listed as pending but core.company_status no longer says so", deal.key)
         if not deal.pending and a.closed:
             closings.setdefault(cik, []).append((a.closed, deal.key))
-        val = (_valuation(conn, cik, deal, announced, price_ok, bool(found("stated_value")))
-               if announced and not deal.pending else {})
-        doc = docs.get(deal.key, {})
+        # pending deals too: their multiple is set at the announcement, like a closed deal's
+        val = _valuation(conn, cik, deal, announced, price_ok, bool(found("stated_value"))) if announced else {}
+        doc = deal_docs.facts_by_deal(conn, {deal.key: announced} if announced else None).get(deal.key, {})
+        docs[deal.key] = doc
         doc_price, doc_parent = doc.get("price"), doc.get("parent")
         doc_agrees = abs(doc_price - deal.price) < 0.005 if doc_price is not None and deal.price is not None else None
         deal_rows.append((
@@ -648,7 +661,7 @@ def export(conn, write) -> None:
             "key": key, "cik": cik, "ticker": ticker, "target": name, "segment": segment, "status": status,
             "acquirer": d.acquirer if acq_ok else (doc_parent if d.pending and doc_parent else None),
             "acquirerType": d.acquirer_type if acq_ok else None,
-            "group": d.group if acq_ok and not d.pending else UNKNOWN,
+            "group": d.group if acq_ok else UNKNOWN,
             "consideration": d.consideration if cons_ok else None,
             "price": float(d.price) if price_ok and d.price is not None else None,
             # an earlier price is published only when the filings contain it

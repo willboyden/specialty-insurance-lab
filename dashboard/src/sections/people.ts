@@ -114,6 +114,15 @@ function mountPeople(host: HTMLElement, data: AppData, store: Store) {
   };
   const caveat = (c: Company) => CAVEAT[c.ticker];
   const staffWord = () => (mode === "reported" ? "employees (10-K)" : "US 401(k) participants");
+  // groups that also run non-insurance businesses are measured by the insurance staff their 10-Ks state
+  const insuranceOnlyNote = (): string => {
+    const groups = visible().filter((c) => rec(c.cik)?.employeesBasis === "insurance operations").map((c) => displayName(c));
+    return groups.length
+      ? ` ${groups.join(" and ")}: insurance operations only, as ${groups.length === 1 ? "its" : "their"} 10-Ks state them `
+        + `(the group total${groups.length === 1 ? " includes" : "s include"} non-insurance businesses); years without `
+        + "that split are left out."
+      : "";
+  };
 
   // ---------------------------------------------------------------- controls and notes
   const modeCtl = segmented<Mode>("Staff measure", [
@@ -199,7 +208,7 @@ function mountPeople(host: HTMLElement, data: AppData, store: Store) {
     rankCard.caption.textContent = mode === "plan"
       ? "Per US 401(k) participant. Bermuda and international groups are left out (most of their staff work outside the US); "
         + "for others with overseas operations the figure runs high."
-      : "Per employee as reported in the 10-K.";
+      : "Per employee as reported in the 10-K." + insuranceOnlyNote();
     rankCard.setTable(() => ({
       columns: ["Company", "Premium per employee", "Staff", "Net premiums earned"],
       rows: ratioSet().filter((c) => perEmp(c.cik, i) != null)

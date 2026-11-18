@@ -67,8 +67,9 @@ EX101_INS = b"""<?xml version="1.0" encoding="utf-8"?>
   <us-gaap:ShortdurationInsuranceContractsCumulativePaidClaimsAndAllocatedClaimAdjustmentExpenseNet contextRef="FY2017_AY2016_Casualty" unitRef="usd" decimals="-3">40000000</us-gaap:ShortdurationInsuranceContractsCumulativePaidClaimsAndAllocatedClaimAdjustmentExpenseNet>
   <us-gaap:ShortdurationInsuranceContractsIncurredButNotReportedIBNRClaimsLiabilityPlusExpectedDevelopmentOnReportedClaims contextRef="FY2017_AY2017_Casualty" unitRef="usd" decimals="-3">30000000</us-gaap:ShortdurationInsuranceContractsIncurredButNotReportedIBNRClaimsLiabilityPlusExpectedDevelopmentOnReportedClaims>
   <us-gaap:ShortdurationInsuranceContractsCumulativeNumberOfReportedClaims contextRef="FY2017_AY2017_Casualty" unitRef="claim" decimals="INF">1250</us-gaap:ShortdurationInsuranceContractsCumulativeNumberOfReportedClaims>
-  <us-gaap:ShortdurationInsuranceContractsHistoricalClaimsDurationYear1 contextRef="FY2017_Casualty" unitRef="pure" decimals="3">0.125</us-gaap:ShortdurationInsuranceContractsHistoricalClaimsDurationYear1>
-  <us-gaap:ShortdurationInsuranceContractsHistoricalClaimsDurationYear2 contextRef="FY2017_Casualty" unitRef="pure" decimals="1">21.5</us-gaap:ShortdurationInsuranceContractsHistoricalClaimsDurationYear2>
+  <us-gaap:ShortdurationInsuranceContractsHistoricalClaimsDurationYearOne contextRef="FY2017_Casualty" unitRef="pure" decimals="1">12.5</us-gaap:ShortdurationInsuranceContractsHistoricalClaimsDurationYearOne>
+  <us-gaap:ShortdurationInsuranceContractsHistoricalClaimsDurationYearTwo contextRef="FY2017_Casualty" unitRef="pure" decimals="1">21.5</us-gaap:ShortdurationInsuranceContractsHistoricalClaimsDurationYearTwo>
+  <us-gaap:ShortdurationInsuranceContractsHistoricalClaimsDurationYearTen contextRef="FY2017_Casualty" unitRef="pure" decimals="1">1.2</us-gaap:ShortdurationInsuranceContractsHistoricalClaimsDurationYearTen>
   <us-gaap:ShortdurationInsuranceContractsIncurredClaimsAndAllocatedClaimAdjustmentExpenseNet contextRef="FY2017_Casualty" unitRef="usd" xsi:nil="true"/>
   <us-gaap:PremiumsEarnedNet contextRef="FY2017" unitRef="usd" decimals="-3">500000000</us-gaap:PremiumsEarnedNet>
   <abc:ShortdurationCustomTotal contextRef="FY2017" unitRef="usd" decimals="-3">1</abc:ShortdurationCustomTotal>
@@ -143,6 +144,8 @@ def test_parse_extracted_inline_instance_with_typed_dimension_and_commas():
     ("ShortdurationInsuranceContractsIncurredButNotReportedIBNRClaimsLiabilityPlusExpectedDevelopmentOnReportedClaims", ("ibnr", None)),
     ("ShortdurationInsuranceContractsCumulativeNumberOfReportedClaims", ("claims", None)),
     ("ShortDurationInsuranceContractsHistoricalClaimsDurationYear7", ("payout", 7)),
+    ("ShortdurationInsuranceContractsHistoricalClaimsDurationYearOne", ("payout", 1)),  # the us-gaap spelling
+    ("ShortdurationInsuranceContractsHistoricalClaimsDurationYearTen", ("payout", 10)),
     ("ShortdurationInsuranceContractsLiabilityForUnpaidClaimsAndAllocatedClaimAdjustmentExpenseNet", ("liability", None)),
     ("ShortdurationInsuranceContractsLiabilityForUnpaidClaimsAndClaimsAdjustmentExpenseAccumulatedUnallocatedClaimAdjustmentExpense", None),
     ("ShortdurationInsuranceContractsLiabilityForUnpaidClaimsAndClaimAdjustmentExpenseOtherReconcilingItem", None),
@@ -161,6 +164,9 @@ def test_line_name_splits_camel_case_and_drops_generic_words():
     assert xi.line_name({"AccidentYearAxis": "AY2018Member", "StatementBusinessSegmentsAxis": "ExcessAndSurplusLinesSegmentMember"},
                         "AccidentYearAxis") == "Excess And Surplus Lines"
     assert xi.line_name({"AccidentYearAxis": "AY2018Member"}, "AccidentYearAxis") == "All lines"
+    # a member written without CamelCase breaks is spelled out from a short list
+    assert xi.line_name({"AccidentYearAxis": "AY2018Member", "ProductOrServiceAxis": "CasualtyoccurrenceMember"},
+                        "AccidentYearAxis") == "Casualty occurrence"
 
 
 def test_triangle_rows_from_parsed_facts():
@@ -174,8 +180,21 @@ def test_triangle_rows_from_parsed_facts():
     rows = {(a[3]): a for a in ay}
     assert rows[2016][4:7] == (100e6, 108e6, 40e6)  # first incurred, latest incurred, latest paid
     assert rows[2017][7:9] == (30e6, 1250.0)  # IBNR and reported claims of the newest accident year
-    # payout percentages: a fraction stays a fraction, a percent (21.5) becomes 0.215
-    assert sorted((p[3], p[4]) for p in payout) == [(1, 0.125), (2, 0.215)]
+    # payout percentages: the line's pattern is in percent (it sums past 1.5), so even its 1.2 tail year is 1.2%
+    assert sorted((p[3], round(p[4], 6)) for p in payout) == [(1, 0.125), (2, 0.215), (10, 0.012)]
+
+
+def test_payout_scale_is_decided_per_line():
+    def fact(line, n, v):
+        return {"cik": 1, "fy_filed": 2020, "accession": "a", "value": v, "period_end": pd.Timestamp("2020-12-31"),
+                "element": f"ShortdurationInsuranceContractsHistoricalClaimsDurationYear{n}",
+                "dims": {"ProductOrServiceAxis": f"{line}Member"}}
+    df = pd.DataFrame([fact("Property", "One", 0.62), fact("Property", "Two", 0.25), fact("Property", "Three", 0.012),
+                       fact("Casualty", "One", 9.0), fact("Casualty", "Two", 18.0), fact("Casualty", "Three", 1.1)])
+    _tri, _ay, payout = triangle_rows(df)
+    got = {(p[2], p[3]): round(p[4], 6) for p in payout}
+    assert got[("Property", 1)] == 0.62 and got[("Property", 3)] == 0.012  # fractions stay fractions
+    assert got[("Casualty", 1)] == 0.09 and got[("Casualty", 3)] == 0.011  # percents become fractions
 
 
 # ---------------------------------------------------------------- roll-forward arithmetic

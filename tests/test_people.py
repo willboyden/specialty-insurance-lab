@@ -48,6 +48,65 @@ def test_headcount_skips_percentages_years_and_part_time_counts():
     assert hc.employees == 830
 
 
+def test_headcount_ignores_ages_and_prefers_the_total_over_a_subgroup():
+    text = ("Claims\nOur employees handle nearly all of our claims. As of December 31, 2021, we employed about 530 internal"
+            " property claim representatives and about 190 staff field adjusters.\nHuman Capital\nAs of December 31, 2021,"
+            " we had about 49,000 employees. The average age of our workforce is 41 years.\n")
+    hc = extract_headcount(text)
+    assert hc.employees == 49_000 and hc.method == "section:verb-count-noun"
+    assert extract_headcount("Human Capital\nThe average age of our workforce is 41 years.\n").employees is None
+
+
+@pytest.mark.parametrize("text", [
+    "Employees\nIn January 2009, we began a restructuring plan that includes staff reductions of approximately 150 employees.\n",
+    "Employees\nAs of December 31, 2009, we had a total of 89 employees in our underwriting department.\n",
+    "Underwriting\nWe avoid writing risks with more than 50 employees in any one building.\n",
+    "Human Capital\nDuring 2021, we hired more than 13,000 new employees.\n",
+    "Business\nThe MGAs with which we partner are typically MGAs with a headcount of 15 to 30 employees.\n",
+])
+def test_headcount_skips_changes_subgroups_and_insureds_staff(text):
+    assert extract_headcount(text).employees is None
+
+
+def test_headcount_of_a_groups_insurance_operations():
+    text = ("Property and Casualty Insurance Operations\nAFG’s property and casualty insurance operations had approximately"
+            " 6,500 employees as of December 31, 2020. The annuity operations had approximately 600 employees.\n")
+    assert extract_headcount(text).employees == 6_500
+
+
+MARKEL_2024 = ("Employees\nAt December 31, 2024, we had approximately 22,000 employees, of whom approximately 5,600 were"
+               " employed within our insurance operations and approximately 16,400 were employed within our Markel"
+               " Ventures operations.\n")
+MARKEL_2019 = ("Employees\nAt December 31, 2019, we had approximately 18,600 employees, of whom approximately 14,000 were"
+               " employed within our Markel Ventures operations.\n")
+ALLEGHANY_2016 = ("Employees\nAs of December 31, 2016, we employed a total of 3,420 persons, as follows: | TransRe | 609 |"
+                  " AIHL and subsidiaries | 830 | Total reinsurance and insurance subsidiaries | 1,439 | Alleghany Capital"
+                  " | 1,958 |\n")
+ALLEGHANY_2012 = ("Employees\nAs of December 31, 2012, we employed a total of 1,506 persons, with 14 persons employed at the"
+                  " parent company, 636 persons employed at TransRe, 778 persons employed at our insurance operating"
+                  " units.\n")
+
+
+@pytest.mark.parametrize(("text", "total", "insurance"), [
+    (MARKEL_2024, 22_000, 5_600),
+    (MARKEL_2019, 18_600, 4_600),
+    (ALLEGHANY_2016, 3_420, 1_439),
+    (ALLEGHANY_2012, 1_506, 1_414),
+    ("Employees\nAs of December 31, 2024, we had 2,550 employees.\n", 2_550, None),
+])
+def test_insurance_staff_of_groups_with_other_businesses(text, total, insurance):
+    hc = extract_headcount(text)
+    assert hc.employees == total and hc.insurance == insurance
+
+
+def test_heading_is_not_the_start_of_a_sentence():
+    from sil.sources.headcount import HEADING
+    assert not HEADING.search("Our employees handle nearly all of our claims.")
+    assert HEADING.search("Human Capital We believe that our people matter.")
+    assert HEADING.search("Employees. As of December 31, 2024, we had 2,550 employees.")
+    assert HEADING.search("Human Capital\n")
+
+
 def test_headcount_document_fallback_needs_explicit_wording():
     text = ("Item 7. Management's discussion. We paid claims to 2,000 policyholders.\n"
             "Elsewhere: at year end the Company employed approximately 4,100 people worldwide.\n")

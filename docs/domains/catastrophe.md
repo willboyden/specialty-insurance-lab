@@ -77,15 +77,29 @@ the shock also contains reserve releases and large single losses, and the carrie
 from the latest model run with its 89% interval. Nothing in this domain refits or changes the model.
 
 **Reported catastrophe losses** (`sil/sources/cat_losses.py`). For each cached earnings-release exhibit (8-K item
-2.02, EX-99.*): every stated catastrophe-loss figure (sentence patterns before and after the amount, combined-ratio
-points, and table rows with the unit from the nearest "in thousands / in millions" header and the period from the
-first column's "Three months ended / Year ended" header) with the sentence it came from. Scope (quarter, year to
-date, full year) comes from the nearest period words. Preference: a quarter sentence, then a quarter table column,
-then a sentence without period words (unless the same amount is the year's), then an unlabeled table outside Q4.
-A fourth quarter that only states the year is derived as the year minus the first three quarters. A figure above
-1.5x the quarter's premiums or above its total incurred losses is rejected. The release is assigned to the latest
-quarter that ended within 120 days before filing. Only cached documents are read; nothing is fetched. The validation
-correlates each carrier's reported catastrophe share of premiums with the model's λ x shock.
+2.02, EX-99.*), a figure counts only where the catastrophe losses are the subject or the object of a statement
+("Catastrophe losses were $40 million", "including current accident year catastrophe losses of $78.5 million",
+"we incurred $22.0 million of catastrophe losses"), never an amount that merely sits near the words. Left out: a
+segment's figure (a segment or line of business named in the statement or just before it, a unit named right after
+it, or an amount whose stated combined-ratio points imply a premium base far from the carrier's net premiums
+earned), one named event's share, a range, an after-tax, ex-catastrophe, prior-year-development or outlook figure, a
+month's figure, an amount followed by "and $X related to reestimates", and a statement whose own period phrase names
+another year. Table rows count when labelled plainly "Catastrophe losses" under a "Three months ended" header (unit
+from the nearest "in thousands / in millions" header; rows in points are skipped). The first statement about the
+quarter in document order wins (releases state the group figure before the segments'); in a fourth-quarter release
+only a statement that names the quarter. "No catastrophe losses in the quarter" counts only in a release that states
+no amount for the quarter anywhere. A fourth quarter that only states the year is derived as the year minus the first
+three quarters. A figure above 1.5x the quarter's premiums or above its total incurred losses is rejected. The release
+is assigned to the latest quarter that ended within 120 days before filing. Only cached documents are read.
+
+How it was checked: random samples of releases, each figure judged by hand against the sentence it came from. The
+first proximity rules were right 6 times in a 14-item pilot, then 21 to 23 times in 40; the strict statements above
+about 30 times in 39, then 32 to 35 in 39, then 37 in 40; a final sample of 40 stored values 36 to 37 times, the
+uncertain ones being plausible table values the release does not explain. The two errors in that last sample ("no
+catastrophe losses" statements about another period or a segment) were fixed afterwards. Figures the releases do not state plainly are simply missing: the strict
+rules keep 396 carrier-quarters of 28 carriers out of 4,972 releases.
+
+The validation correlates each carrier's reported catastrophe share of premiums with the model's λ x shock.
 
 ## Findings (data through 2026-11-18)
 
@@ -107,4 +121,5 @@ correlates each carrier's reported catastrophe share of premiums with the model'
 US indices only; international catastrophes appear only as unexplained shock. Storm Events under-records the largest
 hurricanes. SPC report counts mix weather and observation. HURDAT2 covers the Atlantic basin only. The landfall
 boxes and the ComCat place filter are approximations (tested on known points and places). Company-reported losses
-depend on how each carrier words its releases; the snippet behind every figure is kept for review.
+depend on how each carrier words its releases (a hand check put about 9 in 10 of the stored values right, see above);
+the sentence behind every figure is kept for review, and figures a release does not state plainly are left out.

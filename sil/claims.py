@@ -453,8 +453,7 @@ def triangle_rows(facts: pd.DataFrame) -> tuple[list, list, list]:
         line = xi.line_name(dims, axis)
         ev = pd.Timestamp(f.period_end).year
         if measure == "payout":
-            v = float(f.value)
-            payout.setdefault((f.cik, f.fy_filed, line, n), v / 100 if v > 1.5 else v)
+            payout.setdefault((f.cik, f.fy_filed, line, n), float(f.value))
             continue
         if ay is None:
             continue
@@ -480,7 +479,12 @@ def triangle_rows(facts: pd.DataFrame) -> tuple[list, list, list]:
         by_ay.setdefault(key, {}).update(extra)
     ay_out = [(k[0], k[1], k[2], k[3], r.get("incurred_first"), r.get("incurred_latest"), r.get("paid_latest"),
                r.get("ibnr"), r.get("reported_claims")) for k, r in by_ay.items()]
-    pay_out = [(k[0], k[1], k[2], k[3], v) for k, v in payout.items()]
+    # a filing states one line's payout pattern either as fractions (0.215) or as percents (21.5), so the scale is
+    # decided per company, filing and line: a pattern summing past 1.5 is in percent (a tail year of 1.2 is 1.2%)
+    totals: dict[tuple, float] = {}
+    for (cik, fy, line, _n), v in payout.items():
+        totals[(cik, fy, line)] = totals.get((cik, fy, line), 0.0) + abs(v)
+    pay_out = [(k[0], k[1], k[2], k[3], v / 100 if totals[(k[0], k[1], k[2])] > 1.5 else v) for k, v in payout.items()]
     return triangle, ay_out, pay_out
 
 

@@ -1,6 +1,7 @@
 // What buyers paid against what the target earned: price-to-book at the deal price (y) against the target's
 // trailing return on equity at announcement (x), one dot per deal colored by buyer group, dot area = implied
 // equity value. A reference line marks book value (1.0x). Labels are placed greedily so they never collide.
+// A pending deal is a dashed ring in its buyer's color: priced at its announcement, not closed yet.
 import { scaleLinear, scaleSqrt } from "d3-scale";
 import { Delaunay } from "d3-delaunay";
 import { pointer } from "d3-selection";
@@ -54,8 +55,10 @@ export function dealScatter(o: DealScatterOpts) {
       const order = [...pts].sort((a, b) => (b.value ?? 0) - (a.value ?? 0));
       const dots = f.g.append("g").selectAll("circle").data(order).join("circle")
         .attr("cx", cx).attr("cy", cy).attr("r", (d) => r(d.value ?? 0))
-        .style("fill", (d) => groupColor(d.group)).style("fill-opacity", 0.8)
-        .style("stroke", "var(--surface)").style("stroke-width", 1.5);
+        .style("fill", (d) => (d.status === "pending" ? "var(--surface)" : groupColor(d.group))).style("fill-opacity", 0.8)
+        .style("stroke", (d) => (d.status === "pending" ? groupColor(d.group) : "var(--surface)"))
+        .style("stroke-width", (d) => (d.status === "pending" ? 2 : 1.5))
+        .style("stroke-dasharray", (d) => (d.status === "pending" ? "3 2" : null));
       dots.filter((d) => d.cik === st.selected).raise().style("stroke", "var(--ink)").style("stroke-width", 2);
       // labels: biggest deals first, skipped when they would overlap one already placed
       const placed: { x0: number; x1: number; y0: number; y1: number }[] = [];

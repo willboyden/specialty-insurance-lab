@@ -73,6 +73,12 @@ year. Development of an accident year = latest cumulative incurred / first estim
 volume-weighted over the accident years present at both ages; severity = latest incurred / reported claims. The
 dashboard shows the latest 10-K's tables per company (up to ten lines, largest first).
 
+**Payout patterns.** us-gaap spells the development year out (`...HistoricalClaimsDurationYearOne` to `...YearTen`).
+A filing states one line's pattern either as fractions (0.215) or as percents (21.5), so the scale is decided per
+company, filing and line: a pattern whose values sum past 1.5 is in percent, so its 1.2 tail year means 1.2%, not
+120%. Patterns can sum a little past 100% as filed, because each year's average covers a different set of accident
+years.
+
 ## Caveats
 
 - **Tagging, not accounting.** A blank cell means the carrier did not tag the item comparably that year, not that it
@@ -84,5 +90,10 @@ dashboard shows the latest 10-K's tables per company (up to ten lines, largest f
   transfers) and lines outside the tagged table move reserves too.
 - **Paid-to-incurred below 100% is not a reserve verdict.** A growing book incurs new business at once and pays it
   over years (the section shows the cross-carrier relationship for the chosen year).
+- **Triangles are as filed.** In about 1% of cells cumulative paid exceeds incurred. Slightly above is normal for
+  auto physical damage and property, where incurred is net of the salvage and subrogation still to be recovered; far
+  above means the filing's own paid and incurred tables disagree (Everest's 2025 property reinsurance table: accident
+  year 2018 paid 4,511 against incurred 2,532, in millions). The cell's tooltip says so when paid is more than 10% above
+  incurred.
 - **Triangles appear only for documents in the cache.** Until `python -m sil ingest secdocs` has run, the accident-
   year views show a plain note; the roll-forward views do not depend on them.

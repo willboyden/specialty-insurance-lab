@@ -12,14 +12,21 @@ export interface HeadcountSource {
   accession: string;
   filed: string;
   form: string;
+  /** the insurance operations' staff, when a group with non-insurance businesses states it */
+  insurance?: number | null;
+  insuranceBasis?: string | null;
 }
 
 /** Share of the company's 10-K/10-Q filings mentioning each technology theme, by filing year (techYears). */
 export type TechShares = { filings: number[] } & Record<string, Num[] | number[]>;
 
 export interface PeopleCompany {
-  /** reported 10-K headcount by fiscal year (null until the filing documents are downloaded and parsed) */
+  /** reported 10-K headcount by fiscal year (null until the filing documents are downloaded and parsed); for a
+   *  group with non-insurance businesses (employeesBasis "insurance operations") its insurance operations' staff */
   employees: Num[];
+  /** the group's total headcount, when employees counts its insurance operations only */
+  employeesTotal?: Num[] | null;
+  employeesBasis?: "company" | "insurance operations";
   /** Form 5500: active participants summed over the company's 401(k) plans (US headcount proxy) */
   plan: Num[];
   plans: Num[];

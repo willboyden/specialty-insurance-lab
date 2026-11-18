@@ -12,7 +12,7 @@ import { dealScatter } from "../charts/ma-scatter";
 import { consolidationChart } from "../charts/ma-consolidation";
 import { spendChart } from "../charts/ma-spend";
 import { buyerChart, buyerRows } from "../charts/ma-buyers";
-import { GROUPS, GROUP_HELP, earlierLabel, groupColor, priceLabel } from "../charts/ma-style";
+import { GROUPS, GROUP_HELP, earlierLabel, groupColor, priceLabel, shortBuyer, valueLine } from "../charts/ma-style";
 import { rankBars } from "../charts/rankbars";
 import "./ma.css";
 
@@ -90,14 +90,19 @@ function mount(host: HTMLElement, data: AppData, store: Store): void {
     { label: "Listed specialty carriers", value: count(L.count[L.count.length - 1]),
       delta: `${L.count[0]} at the end of ${L.years[0]}` },
     { label: "Take-privates pending", value: count(pendingAll.length),
-      delta: pendingAll.map((d) => d.target).join(", ") || "none" },
+      delta: pendingAll.map((d) => (d.acquirer ? `${d.ticker} by ${shortBuyer(d)}` : d.target)).join(", ") || "none" },
   ]);
   host.append(el("div", { style: "height:16px" }));
   const grid = el("div", { class: "grid" });
   host.append(grid);
-  const groupLegend = (c: { legend: HTMLElement }, withPending = false) => legend(c.legend, [
+  // pending deals keep their buyer's color with a dashed outline (timeline) or a dashed ring (scatter); gray only while
+  // a pending deal's buyer is not identified yet
+  const pendingNoBuyer = pendingAll.some((d) => !d.acquirer);
+  const groupLegend = (c: { legend: HTMLElement }, pendingShape?: "outline" | "ring") => legend(c.legend, [
     ...GROUPS.map((g) => ({ label: g, color: groupColor(g), shape: "box" as const })),
-    ...(withPending ? [{ label: "Pending (buyer in the proxy)", color: groupColor("Buyer not yet identified"), shape: "box" as const }] : []),
+    ...(pendingShape ? [{ label: "Pending (dashed)", color: "var(--ink-2)", shape: pendingShape }] : []),
+    ...(pendingShape && pendingNoBuyer
+      ? [{ label: "Buyer not yet identified", color: groupColor("Buyer not yet identified"), shape: "box" as const }] : []),
   ]);
 
   // ---------------------------------------------------------------- deal timeline
@@ -107,7 +112,7 @@ function mount(host: HTMLElement, data: AppData, store: Store): void {
     sub: "From the first filing that states the deal terms to the closing (8-K item 5.01 or the delisting), by buyer",
     span: 12, id: "ma-timeline",
   });
-  groupLegend(t, true);
+  groupLegend(t, pendingAll.length ? "outline" : undefined);
   const tBody = el("div");
   t.body.append(tBody);
   const drawTimeline = () => {
@@ -120,11 +125,26 @@ function mount(host: HTMLElement, data: AppData, store: Store): void {
   const nPrice = closedAll.filter((d) => d.verified.price).length;
   const nPay = closedAll.filter((d) => d.verified.consideration).length;
   const mixed = closedAll.filter((d) => d.consideration === "mixed").map((d) => d.ticker);
+  // a second, independent check: the price read from the deal documents themselves (merger proxies, press releases)
+  const docCheck = (): string => {
+    const read = ma.deals.filter((d) => d.doc?.price != null && d.price != null);
+    if (!read.length) return "";
+    const differ = read.filter((d) => d.doc?.agrees === false);
+    const why = (d: MaDeal) => {
+      const p = d.doc?.price ?? NaN;
+      return d.earlierPrices.some((e) => Math.abs(e.price - p) < 0.005)
+        ? `${d.ticker} (its first agreed $${p.toFixed(2)})` : `${d.ticker} ($${p.toFixed(2)}, see its note)`;
+    };
+    return `Read from the deal documents themselves, the most-stated price agrees for ${read.length - differ.length} `
+      + `of ${read.length} deals` + (differ.length ? `; it differs for ${differ.map(why).join(", ")}.` : ".");
+  };
   t.caption.textContent = `Checked against the targets' own filings with SEC full-text search: the buyer's name and the price `
     + `in the same document for ${nAcq} of ${closedAll.length} deals, the price per share for ${nPrice}`
     + `${mixed.length ? ` (${mixed.join(" and ")} paid in stock and cash: their exchange terms are checked instead)` : ""}, `
     + `the form of payment for ${nPay}. A white tick on a bar marks the merger proxy; the dotted line is today. `
-    + (ma.documentsRead ? `Terms also read from ${ma.documentsRead} deal documents.` : "Pending buyers come from the merger proxies once those documents are read.");
+    + (pendingAll.length ? `Pending deals (dashed, running to today) are checked the same way: buyer and price found for `
+      + `${pendingAll.filter((d) => d.verified.acquirer && d.verified.price).length} of ${pendingAll.length}. ` : "")
+    + docCheck();
   t.setTable(() => ({
     columns: ["Target", "Buyer", "Buyer type", "Announced", "Closed", "Days", "Price", "Implied value", "Price / book", "Found in filings"],
     rows: visibleDeals().map((d) => [
@@ -161,6 +181,11 @@ function mount(host: HTMLElement, data: AppData, store: Store): void {
 
   // ---------------------------------------------------------------- valuation vs performance
   const withBoth = closedAll.filter((d) => d.pb != null && d.roe != null);
+  // a pending deal is drawn when it falls inside the closed deals' price-to-book range and the readable ROE range;
+  // otherwise the caption names it with its values (one far outlier would squash the closed deals into a corner)
+  const pbTop = withBoth.length ? Math.max(...withBoth.map((d) => d.pb as number)) : 0;
+  const onScale = (d: MaDeal) => d.status === "closed"
+    || (d.pb != null && d.roe != null && (d.pb as number) <= pbTop && (d.roe as number) >= -0.3);
   const r = withBoth.length > 3 ? pearson(withBoth.map((d) => d.roe as number), withBoth.map((d) => d.pb as number)) : NaN;
   const hiRoe = withBoth.filter((d) => (d.roe as number) >= 0.1).map((d) => d.pb as number);
   const loRoe = withBoth.filter((d) => (d.roe as number) < 0.1).map((d) => d.pb as number);
@@ -171,18 +196,25 @@ function mount(host: HTMLElement, data: AppData, store: Store): void {
     sub: "Price-to-book at the deal price against the target's trailing return on equity; dot area = implied equity value",
     span: 7, id: "ma-valuation",
   });
-  groupLegend(s);
-  const scatter = dealScatter({ card: s, store, label: "Price to book against target ROE", getDeals: visibleDeals, canFocus });
+  const pendingDrawn = pendingAll.filter((d) => d.pb != null && d.roe != null && onScale(d));
+  const pendingOff = pendingAll.filter((d) => d.pb != null && !onScale(d));
+  groupLegend(s, pendingDrawn.length ? "ring" : undefined);
+  const scatter = dealScatter({ card: s, store, label: "Price to book against target ROE",
+    getDeals: () => visibleDeals().filter(onScale), canFocus });
   const below = withBoth.filter((d) => (d.pb as number) < 1).map((d) => d.ticker);
   const extreme = withBoth.filter((d) => (d.roe as number) < -0.3).map((d) => `${d.ticker} (ROE ${pct(d.roe)})`);
   s.caption.textContent = `Correlation across ${withBoth.length} deals: r = ${Number.isFinite(r) ? r.toFixed(2) : "–"}. `
     + `Bought below book: ${below.join(", ") || "none"}. Book value per share = common equity (total equity less preferred `
     + `stock) over shares outstanding at the last quarter before the announcement`
     + `${extreme.length ? `; ${extreme.join(", ")} sits on the left edge` : ""}. `
-    + `Deals without a published multiple: ${closedAll.filter((d) => d.pb == null).map((d) => d.ticker).join(", ") || "none"} (see the table).`;
+    + `Deals without a published multiple: ${closedAll.filter((d) => d.pb == null).map((d) => d.ticker).join(", ") || "none"} (see the table).`
+    + (pendingDrawn.length ? ` Dashed rings: the pending ${pendingDrawn.map((d) => `${d.ticker} (${times(d.pb)})`).join(" and ")}, `
+      + "at the agreed price and the last balance sheet before the announcement; not in the correlation." : "")
+    + (pendingOff.length ? ` Off the scale and not drawn: ${pendingOff.map((d) => `${d.ticker} (pending) at ${times(d.pb)} book with a `
+      + `trailing ROE of ${pct(d.roe)}`).join("; ")}; see the table.` : "");
   s.setTable(() => ({
     columns: ["Target", "Buyer group", "Price / book", "Target ROE (TTM)", "Combined ratio (TTM)", "Book quarter", "Value basis"],
-    rows: visibleDeals().filter((d) => d.status === "closed").map((d) => [d.target, d.group, times(d.pb), pct(d.roe), pct(d.cr),
+    rows: visibleDeals().map((d) => [`${d.target}${d.status === "pending" ? " (pending)" : ""}`, d.group, times(d.pb), pct(d.roe), pct(d.cr),
       d.bookQuarter ?? "–", d.valueBasis ?? "–"]),
   }));
 
@@ -303,12 +335,17 @@ function mount(host: HTMLElement, data: AppData, store: Store): void {
       el("div", { class: "ma-item-head" },
         el("span", { class: "ma-chip ma-chip-pending", text: "pending" }),
         el("strong", { text: `${d.target} (${d.ticker})` })),
-      el("p", { text: `Merger agreement reported ${d.announced ?? "–"} (8-K item 1.01); first merger proxy ${d.proxy ?? "–"}.`
-        + (d.note ? ` ${cap(d.note)}.` : "") }),
-      el("p", { class: "ma-muted", text: `Filed so far: ${d.pendingForms ?? "–"}.` }),
-      el("p", { class: "ma-muted", text: d.acquirer
-        ? `Buyer named in the proxy: ${d.acquirer}.`
-        : "Buyer and price: read from the merger proxy once the filing documents are cached." }));
+      el("p", { text: d.acquirer && d.verified.acquirer
+        ? `Buyer: ${d.acquirer} (${d.acquirerType ?? "–"}), ${priceLabel(d)}${valueLine(d) ? `: ${valueLine(d)}` : ""}.`
+        : d.acquirer ? `Buyer named in the merger proxy: ${d.acquirer}.` : "Buyer and price: not found in the company's filings yet." }),
+      el("p", { text: `Terms first filed ${d.announced ?? "–"}; first merger proxy ${d.proxy ?? "–"}.` + (d.note ? ` ${cap(d.note)}.` : "") }),
+      el("p", { class: "ma-muted", text: `Filed so far: ${d.pendingForms ?? "–"}.` }));
+    const acq = d.checks.find((c) => c.field === "acquirer");
+    if (acq?.url) {
+      item.append(el("p", { class: "ma-muted" },
+        el("span", { text: `Buyer and price found together in ${acq.hits} of the company's filings (SEC full-text search); ` }),
+        el("a", { href: acq.url, text: `the first, ${acq.firstForm ?? "filing"} of ${acq.first ?? "–"}`, rel: "noopener" }), el("span", { text: "." })));
+    }
     if (d.proxyUrl) item.append(el("a", { href: d.proxyUrl, text: `Open the ${d.proxyForm ?? "proxy"} on EDGAR`, rel: "noopener" }));
     list.append(item);
   }

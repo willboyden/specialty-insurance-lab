@@ -6,7 +6,7 @@ from __future__ import annotations
 from datetime import date
 
 from sil import ma
-from sil.deals import DEALS, GROUPS, UNKNOWN, by_key
+from sil.deals import DEALS, GROUPS, UNKNOWN, Deal, by_key
 from sil.sources import deal_docs
 from sil.universe import COMPANIES
 
@@ -22,8 +22,8 @@ def test_every_acquired_carrier_has_a_deal_and_every_deal_a_carrier():
 
 def test_deal_fields_are_consistent():
     for d in DEALS:
-        if d.pending:
-            assert d.group == UNKNOWN and not d.acquirer
+        if d.pending and not d.acquirer:  # a pending deal before its buyer is known
+            assert d.group == UNKNOWN and not d.acquirer_phrases and d.price is None
             continue
         assert d.group in GROUPS
         assert d.acquirer and d.acquirer_phrases
@@ -46,6 +46,13 @@ def test_acquirer_check_requires_the_price_in_the_same_document():
     assert ("acquirer", ("Further Global", "TowerBrook", "$12.85 per share")) in pros  # a consortium: all names
     natl = ma.checks_for(by_key()["NATL-2016"])
     assert ("earlier_price:proposed", ("$30.00 per share",)) in natl
+
+
+def test_pending_deals_are_checked_like_closed_ones():
+    bow = ma.checks_for(by_key()["BOW-pending"])
+    assert ("acquirer", ("American Family", "$34.00 per share")) in bow
+    assert ("price", ("$34.00 per share",)) in bow
+    assert ma.checks_for(Deal("X-pending", "X", 2026, pending=True)) == []  # no candidate yet: nothing to search
 
 
 def test_cash_variants_format_thousands():
@@ -114,6 +121,15 @@ def test_extract_mixed_consideration():
     got = deal_docs.extract(STOCK)
     assert got["price"] == 31.40
     assert got["consideration"] in ("stock", "mixed")
+
+
+def test_extract_skips_par_value_and_suffix_only_names():
+    text = ("In the merger, Alterra shareholders will be entitled to receive for each common share, par value $1.00 per"
+            " share, of Alterra, 0.04315 of a share of Markel common stock and $10.00 in cash.")
+    assert 1.00 not in deal_docs.extract(text)["prices"]
+    assert deal_docs._clean_name("LLC") is None and deal_docs._clean_name("Company, Inc") is None
+    assert deal_docs._clean_name("Treadstone Parent Inc") == "Treadstone Parent Inc"
+    assert deal_docs._clean_name("Company, Evergreen Parent, L.P") == "Evergreen Parent, L.P"
 
 
 def test_extract_nothing_from_unrelated_text():

@@ -2,7 +2,7 @@
 
 **Live dashboard: https://willboyden.github.io/specialty-insurance-lab/**
 
-47 hand-selected US-listed specialty insurers, including the ones acquired or delisted since 2009, rebuilt quarter
+48 hand-selected US-listed specialty insurers, including the ones acquired or delisted since 2009, rebuilt quarter
 by quarter from public SEC filings; set against catastrophe, geopolitical, AI-cycle and inflation data; and
 stress-tested with a hierarchical Bayesian model whose scenarios run live in the browser. Around the model: each
 carrier's claims and reserves, the catastrophes behind the industry's bad quarters, every acquisition in the
@@ -12,8 +12,8 @@ universe, and how many people the carriers employ and what they say about techno
 
 ## What is in it
 
-- **A Postgres database of public data** (about 1.8 million rows in 60 tables): every us-gaap, dei and srt XBRL fact
-  reported by 56 insurers in any SEC filing (each filing's version kept), five capex and cash-flow tags of six
+- **A Postgres database of public data** (about 2.3 million rows in 62 tables): every us-gaap, dei and srt XBRL fact
+  reported by 57 insurers in any SEC filing (each filing's version kept), five capex and cash-flow tags of six
   AI-infrastructure companies, the full EDGAR filing index, SEC full-text search hits for 17 risk themes and 8
   technology themes, FRED series, the Caldara-Iacoviello Geopolitical Risk index, NOAA catastrophe, hurricane,
   severe-storm, ENSO and temperature data, USGS earthquakes, NIFC wildfire statistics, every FEMA disaster
@@ -46,10 +46,12 @@ universe, and how many people the carriers employ and what they say about techno
   - *People and technology*: US staff from Form 5500 retirement-plan filings, premium per employee, staff growth
     against premium growth, capital spending, technology themes in filings, industry employment and the AI
     builders' R&D.
-  - Parts that need SEC filing documents (accident-year triangles and claim counts from the 10-K XBRL instances,
-    company-reported catastrophe losses from earnings releases, headcount as reported in each 10-K, deal terms
-    read from merger proxies) are built and tested, and switch on once the documents are downloaded (see Access
-    notes).
+  - From the filing documents themselves (8,629 documents, 14 GB, downloaded once; see Access notes): accident-year
+    loss triangles, reported claim counts and payout patterns from the 10-K XBRL instances of 48 carriers; headcount
+    as each 10-K states it (a group with non-insurance businesses, such as Markel, by its insurance staff);
+    catastrophe losses as carriers state them in their earnings releases; deal terms read from the merger documents
+    as a second check on the search-verified ones. Every extractor was checked by hand against random samples of
+    real documents before its output was published (details in [docs/domains/](docs/domains/)).
 - **A d3 dashboard** with linked views: hover a carrier anywhere and it lights up everywhere; every chart has an
   accessible table view, light and dark themes, and works on a phone.
 
@@ -58,8 +60,8 @@ universe, and how many people the carriers employ and what they say about techno
 <!-- findings:start -->
 ### Universe
 
-- 47 specialty carriers (23 active, 24 acquired or exited), 9 standard-lines benchmark carriers (4 flagged not comparable).
-- 1,089,511 XBRL facts (3,737 distinct tags), 76,265 filings in the insurers' EDGAR indexes.
+- 48 specialty carriers (24 active, 24 acquired or exited), 9 standard-lines benchmark carriers (4 flagged not comparable).
+- 1,090,012 XBRL facts (3,741 distinct tags), 76,298 filings in the insurers' EDGAR indexes.
 
 ### The industry (catastrophe) shock
 
@@ -109,12 +111,13 @@ Median year-1 combined-ratio change vs the baseline, and capital generated over 
 - **Social-inflation surge**: biggest combined-ratio hits RNR +3.4 pts (overlay +3.0 pts), PRHI +3.2 pts (overlay +3.0 pts), EIG +3.1 pts (overlay +2.8 pts), MKL +3.0 pts (overlay +2.8 pts); biggest capital hits JRVR −19 pts of equity, AMSF −15 pts of equity, BOW −12 pts of equity.
 - **Everything at once**: biggest combined-ratio hits RNR +41.0 pts (overlay +4.8 pts), PLGO +31.3 pts (overlay +0.9 pts), HG +25.8 pts (overlay +4.2 pts), EG +19.6 pts (overlay +1.9 pts); biggest capital hits PLGO −59 pts of equity, RNR −56 pts of equity, MKL −41 pts of equity.
 
-### Claims and reserves (56 carriers, fiscal 2009–2025)
+### Claims and reserves (57 carriers, fiscal 2009–2025)
 
 - Median prior-year reserve development of comparable specialty carriers, as a share of opening reserves (negative = releases): 2010–2017 −1.9% (71 of 238 carriers adverse); 2023–2024 0.0% (23 of 50 carriers adverse); 2025 −2.2% (6 of 25 carriers adverse).
 - Longest tails in fiscal 2025 (years of paid claims held in reserve): Bowhead Specialty 8.3 yrs (paid 27% of incurred), Kinsale Capital 7.3 yrs (paid 39% of incurred), Hamilton Insurance 4.8 yrs (paid 50% of incurred); specialty median 2.9 yrs.
 - Premium growth and paid-to-incurred across 27 active carriers, fiscal 2025: correlation -0.76 (new business is incurred at once and paid over years).
 - Largest single-year reserve charges: Atlas Financial 2018 (55.0% of opening reserves), Tower Group 2013 (37.5% of opening reserves), Presurance (Conifer) 2016 (34.1% of opening reserves).
+- Accident-year triangles (each carrier's latest 10-K, 39 comparable specialty carriers): at age 3, accident years 2014–2019 stood between −0.7% and +2.4% of their first incurred estimates, 2020–2023 between −5.4% and −3.2% (incurred-weighted; the mix of carriers differs by year).
 
 ### Catastrophes
 
@@ -123,6 +126,7 @@ Median year-1 combined-ratio change vs the baseline, and capital generated over 
 - ENSO (Aug–Oct ONI) and Atlantic season energy (ACE) correlate -0.35 over 76 seasons: El Niño seasons average 86 ACE, La Niña seasons 135.
 - Seasons since 2000 without a US hurricane landfall: 2000, 2001, 2006, 2009, 2010, 2013, 2015, 2025.
 - NFIP paid $72.6B (nominal) on flood events since 2000; the largest is Hurricane Katrina at $16.3B.
+- Catastrophe losses carriers state in their earnings releases (396 carrier-quarters, 28 carriers): their share of premiums correlates +0.69 with the model's implied catastrophe load (sensitivity times industry shock) over 223 carrier-quarters.
 
 ### Mergers and acquisitions (23 closed deals, 2013–2026)
 
@@ -130,12 +134,14 @@ Median year-1 combined-ratio change vs the baseline, and capital generated over 
 - Median price-to-book 1.28× (range 0.70–2.76×, 22 deals); correlation with the target's trailing ROE -0.01 (21 deals).
 - Buyers: US insurer 8 ($25.2B); Other non-US insurer 7 ($22.3B); Private capital 5 ($7.4B); Japanese insurer 3 ($17.2B).
 - Median time from the first statement of terms to closing: 177 days (105–464).
-- Listed specialty carriers in this universe: 31 at the end of 2008, 23 now.
+- Listed specialty carriers in this universe: 31 at the end of 2008, 24 now.
+- Pending take-privates: Bowhead Specialty by American Family Insurance at $34.00 a share, announced 2026-08-03 (2.37× book, $1.1B); Accelerant Holdings by Thoma Bravo at $20.25 a share, announced 2026-08-13 (6.17× book, $4.4B).
 
 ### People and technology
 
 - Median premium per US 401(k) plan participant (a US-headcount proxy from DOL Form 5500), fiscal 2025: $1.44M across 18 active US-based carriers (Bermuda and international groups left out: most of their staff work abroad).
 - 12 of 14 of those carriers grew premium faster than US plan staff over 2020–2025; median gap +6.2 pts a year (premium growth includes rate increases, so part of the gap is pricing).
+- Median premium per employee from each 10-K's reported headcount, fiscal 2025: $1.83M across 17 active specialty carriers (a group with non-insurance businesses is counted by the insurance staff its 10-K states).
 - Share of active specialty carriers' 10-K and 10-Q filings mentioning artificial intelligence: 2019 1.6%, 2023 5.8%, 2025 40.0%.
 
 ### Model diagnostics
@@ -266,12 +272,16 @@ The export stops when a label disagrees, and the stress lab simulates only the c
   than values as first reported, and its refits use fewer posterior draws than the production fit.
 - No market prices: free sources need a key or a browser, and index owners restrict redistribution.
 - Disclosure counts measure what filings discuss, not exposure.
-- Staff counts are a US-only proxy (employees in each carrier's US 401(k) plans) until 10-K headcount is loaded;
-  Bermuda and international groups are left out of per-employee measures.
+- Staff counts come two ways: as each 10-K states them (worldwide, and only where a release says it plainly), and
+  as a US-only proxy (employees in each carrier's US 401(k) plans), from which Bermuda and international groups are
+  left out of per-employee measures.
 - Claims measures depend on the roll-forward tags each carrier chooses: Travelers stops tagging paid losses after
   2012 and The Hartford after 2011, and only a handful of carriers tag the IBNR/case split.
 - The peril indices are US-only while the carriers write worldwide, recent NFIP quarters grow as claims settle,
   and HURDAT2 here is the Atlantic basin only.
+- Company-reported catastrophe losses are read from press-release wording, so only figures a release states plainly
+  are kept (396 carrier-quarters of 28 carriers); a hand check of random samples put about 9 in 10 right. Loss
+  triangles are as filed, including the rare cell where a company's paid and incurred tables disagree.
 - The deal list covers the carriers in the universe; deals that closed before 2013 are under-represented, because
   carriers acquired before they filed XBRL were never discovered.
 - Scenarios are hypothetical stress tests, not predictions, and nothing here is investment advice.
@@ -290,7 +300,8 @@ docs/              schema.md, findings.md, domains/ (method notes), universe_can
 
 ## Data sources and terms
 
-- **SEC EDGAR** (U.S. Securities and Exchange Commission): XBRL company facts, submissions and full-text search.
+- **SEC EDGAR** (U.S. Securities and Exchange Commission): XBRL company facts, submissions, full-text search, and
+  the filing documents (10-K reports and their XBRL instances, earnings-release and deal exhibits, merger proxies).
   Public domain.
 - **FRED**, Federal Reserve Bank of St. Louis: series from the U.S. Bureau of Labor Statistics (CPI, producer
   prices, insurance-carrier employment, the employment cost index), Bureau of Economic Analysis (GDP, insurance

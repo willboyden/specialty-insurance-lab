@@ -453,7 +453,17 @@ export const catastropheSection = {
       rc.caption.textContent = `${rep.companyQuarters} carrier-quarters extracted from ${rep.documentsListed} release documents. `
         + (v ? `Across carriers, the model's catastrophe component and the reported share correlate ${r2s(v.pooledR)} `
           + `(${v.n} carrier-quarters)` + (mine ? `; for ${name}, ${r2s(mine.r)} over ${mine.n} quarters. ` : ". ") : "")
-        + "The model line is a deviation from an average quarter, so compare the swings, not the level.";
+        + "The model line is a deviation from an average quarter, so compare the swings, not the level."
+        + sparseNote(sel, name);
+    };
+    // only figures a release states plainly are kept, so some carriers have few quarters: point to those with many
+    const sparseNote = (sel: number, name: string): string => {
+      const count = (k: string) => rep.series[k]?.reported ?? rep.series[k]?.ratio.filter((x) => x != null).length ?? 0;
+      const n = count(String(sel));
+      if (n >= 6) return "";
+      const most = Object.keys(rep.series).sort((a, b) => count(b) - count(a)).slice(0, 4)
+        .map((k) => `${data.byCik.get(Number(k))?.ticker ?? k} (${count(k)})`);
+      return ` ${name}'s releases state the figure plainly in ${n} quarter${n === 1 ? "" : "s"}; most quarters: ${most.join(", ")}.`;
     };
     drawReported();
     rc.onRedraw(drawReported);
@@ -462,8 +472,10 @@ export const catastropheSection = {
       const s = rep.series[String(store.get().selected)];
       return {
         columns: ["Quarter", "Reported ($)", "Share of premiums", "Model λ × shock", "Basis"],
+        // the quarters with a reported figure (the series also spans quarters whose releases state none)
         rows: s ? s.q.map((q, i) => [quarterLabel(q), money(s.usd[i]), level(s.ratio[i]),
-          s.model && num(s.model[i]) ? pts(s.model[i]) : "–", s.basis[i]]).reverse() : [],
+          s.model && num(s.model[i]) ? pts(s.model[i]) : "–", s.basis[i] ?? "–"])
+          .filter((_r, i) => s.ratio[i] != null).reverse() : [],
         caption: "Reported catastrophe losses",
       };
     });

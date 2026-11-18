@@ -136,7 +136,10 @@ def is_claims_element(name: str) -> bool:
     return name.lower().startswith("shortduration")
 
 
-_PAYOUT = re.compile(r"HistoricalClaimsDurationYear(\d+)$", re.IGNORECASE)
+# us-gaap spells the year out (...DurationYearOne to ...DurationYearTen); digits are accepted too
+_PAYOUT_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9,
+                 "ten": 10}
+_PAYOUT = re.compile(r"HistoricalClaimsDurationYear(\d+|" + "|".join(_PAYOUT_WORDS) + r")$", re.IGNORECASE)
 
 
 def classify(name: str) -> tuple[str, int | None] | None:
@@ -150,7 +153,8 @@ def classify(name: str) -> tuple[str, int | None] | None:
     n = name.lower()
     m = _PAYOUT.search(name)
     if m:
-        return "payout", int(m.group(1))
+        year = m.group(1)
+        return "payout", int(year) if year.isdigit() else _PAYOUT_WORDS[year.lower()]
     if "numberofreportedclaims" in n or "reportedclaimscount" in n:
         return "claims", None
     if "incurredbutnotreported" in n:
@@ -181,11 +185,20 @@ def accident_year(dims: dict[str, str]) -> tuple[int | None, str | None]:
     return None, None
 
 
+# member names a filer wrote without CamelCase breaks (Kinsale, Hartford), spelled out for display
+GLUED_WORDS = {
+    "casualtyclaimsmade": "Casualty claims-made",
+    "casualtyoccurrence": "Casualty occurrence",
+    "grouplifetermdisabilityandaccident": "Group life, term disability and accident",
+}
+
+
 def split_words(name: str) -> str:
     s = re.sub(r"Member$", "", name)
     s = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", s)
     s = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1 \2", s)
-    return " ".join(s.replace("_", " ").split())
+    words = " ".join(s.replace("_", " ").split())
+    return " ".join(GLUED_WORDS.get(w.lower(), w) for w in words.split(" "))
 
 
 GENERIC_WORDS = re.compile(r"\b(segment|segments|line of business|lines of business|operating)\b", re.IGNORECASE)

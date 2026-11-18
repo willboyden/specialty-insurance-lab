@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 import re
 from collections import Counter
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from ..db import ingest_run
 from ..http import Fetcher
@@ -51,6 +51,9 @@ _PARENT = [
 _AGREEMENT_DATE = re.compile(r"Agreement and Plan of Merger,?\s+dated as of\s+([A-Za-z]+ \d{1,2}, \d{4})",
                              re.IGNORECASE)
 _BAD_NAMES = {"the company", "company", "we", "the merger", "merger sub", "parent", "the parties"}
+# an entity suffix alone is not a name ("... Holdings LLC" cut down to "LLC")
+_SUFFIX_ONLY = re.compile(r"^(?:company,?\s+)?(?:llc|l\.?l\.?c|inc|ltd|limited|l\.?p|lp|corp|corporation|plc|s\.?a|n\.?v|co)$",
+                          re.IGNORECASE)
 
 
 def _snippet(text: str, start: int, end: int, pad: int = 140) -> str:
@@ -78,8 +81,8 @@ def _sentence(text: str, start: int, end: int) -> str:
 
 def _clean_name(name: str) -> str | None:
     n = " ".join(name.split()).strip(" ,.;:")
-    n = re.sub(r"^(?:and|by|with|among|between)\s+", "", n, flags=re.IGNORECASE)
-    if len(n) < 3 or n.lower() in _BAD_NAMES or not re.search(r"[A-Za-z]{2}", n):
+    n = re.sub(r"^(?:and|by|with|among|between|the\s+company,|company,)\s+", "", n, flags=re.IGNORECASE)
+    if len(n) < 3 or n.lower() in _BAD_NAMES or _SUFFIX_ONLY.match(n) or not re.search(r"[A-Za-z]{2}", n):
         return None
     return n
 
@@ -97,6 +100,9 @@ def extract(text: str) -> dict:
     cash_hits = 0
     first_at: dict[float, tuple[int, int]] = {}
     for m in _PRICE.finditer(text):
+        # "each common share, par value $1.00 per share" is the par value, not a price
+        if re.search(r"par\s+value\s*(?:of\s*)?$", text[max(0, m.start() - 20):m.start()], re.IGNORECASE):
+            continue
         if not _DEAL_CONTEXT.search(_sentence(text, m.start(), m.end())):
             continue
         value = float(m.group(1).replace(",", ""))
@@ -186,15 +192,25 @@ def ingest(conn, fetcher: Fetcher) -> None:
         log.info("deal documents: %d read, %d not cached yet, %d facts", read, skipped, len(rows))
 
 
-def facts_by_deal(conn) -> dict[str, dict]:
-    """Per deal: the price most documents state, the buyer the proxies name, the form of payment."""
+def facts_by_deal(conn, since: dict[str, date] | None = None) -> dict[str, dict]:
+    """Per deal: the price most documents state, the buyer the proxies name, the form of payment.
+
+    since: per deal, the announcement date; documents filed more than 30 days before it belong to an earlier deal
+    of the same company (Tower's 2013 merger with Canopius Bermuda before ACP Re's 2014 buy-out)."""
     exists = conn.execute("select to_regclass('raw.ma_deal_doc_fact') is not null").fetchone()[0]
     if not exists:
         return {}
     out: dict[str, dict] = {}
-    for key, field, value_text, n in conn.execute(
-        "select deal_key, field, value_text, count(*) from raw.ma_deal_doc_fact group by 1, 2, 3 order by 1, 2, 4 desc"
-    ):
+    rows = conn.execute(
+        "select x.deal_key, x.field, x.value_text, f.filing_date from raw.ma_deal_doc_fact x"
+        " join raw.sec_filing f using (accession)").fetchall()
+    counts: Counter = Counter()
+    for key, field, value_text, filed in rows:
+        start = (since or {}).get(key)
+        if start is not None and filed < start - timedelta(days=30):
+            continue
+        counts[(key, field, value_text)] += 1
+    for (key, field, value_text), n in sorted(counts.items(), key=lambda kv: (kv[0][0], kv[0][1], -kv[1])):
         d = out.setdefault(key, {})
         if field in d:
             continue

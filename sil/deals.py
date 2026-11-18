@@ -102,7 +102,8 @@ DEALS: list[Deal] = [
          "cash", 12.85, ("$12.85 per share",), ("$12.85 per share in cash",), acquirer_all=True,
          note="its majority holders consented in writing, so an information statement replaced the proxy vote"),
     Deal("Y-2022", "Y", 2022, "Berkshire Hathaway", "US insurer", US, ("Berkshire Hathaway",),
-         "cash", 848.02, ("$848.02 per share",), ("$848.02 per share in cash",)),
+         "cash", 848.02, ("$848.02 per share",), ("$848.02 per share in cash",),
+         note="$848.02 is $850.00 per share less the financial advisory fee due to Goldman Sachs (merger proxy)"),
     Deal("TIG-2023", "TIG", 2023, "Altaris", "Private equity (majority owner)", PRIVATE, ("Altaris",),
          "cash", 6.15, ("$6.15 per share",), ("$6.15 per share in cash",),
          note="Altaris already controlled Trean: a minority buy-out (Schedule 13E-3)"),
@@ -114,11 +115,18 @@ DEALS: list[Deal] = [
          note="second exit: listed again in May 2025 after Apollo's ownership; a foreign private issuer (6-K)"),
     Deal("PRA-2026", "PRA", 2026, "The Doctors Company", "US reciprocal insurer", US, ("The Doctors Company",),
          "cash", 25.00, ("$25.00 per share",), ("$25.00 per share in cash",)),
-    # ---- pending take-privates (core.company_status says 'pending'); the buyer comes from the merger proxy
-    Deal("BOW-pending", "BOW", 2026, pending=True,
-         note="merger proxy and going-private schedule (SC 13E3) filed: an affiliated buyer"),
-    Deal("ARX-pending", "ARX", 2026, pending=True,
-         note="preliminary merger proxy and going-private schedule (SC 13E3) filed: an affiliated buyer"),
+    # ---- pending take-privates (core.company_status says 'pending'); checked like the closed deals
+    Deal("BOW-pending", "BOW", 2026, "American Family Insurance", "US mutual insurer", US, ("American Family",),
+         "cash", 34.00, ("$34.00 per share",), ("$34.00 per share in cash",), pending=True,
+         note="American Family Mutual Insurance Company, S.I., through its subsidiary Trident Superior Inc.; a"
+              " going-private transaction (Schedule 13E-3)"),
+    Deal("ARX-pending", "ARX", 2026, "Thoma Bravo", "Private equity", PRIVATE, ("Thoma Bravo",),
+         "cash", 20.25, ("$20.25 per share",), ("$20.25 per share in cash", "$20.25 in cash, without interest"),
+         pending=True,
+         note="Thoma Bravo Discover Fund V, through Cherry Tree BidCo; the $20.25 grows by a ticking amount of"
+              " $0.00333 a share per calendar day from the agreement's Ticking Amount Start Date until the closing;"
+              " a going-private transaction (Schedule 13E-3). Its trailing ROE at the announcement includes a"
+              " $1.37 billion net loss in Q3 2025, the quarter it listed"),
 ]
 
 

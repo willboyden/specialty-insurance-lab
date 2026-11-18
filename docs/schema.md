@@ -2,7 +2,7 @@
 
 Generated from the live Postgres database by `scripts/schema_doc.py`.
 
-## `core.cat_loss_reported` (table, 0 rows)
+## `core.cat_loss_reported` (table, 396 rows)
 
 `cik` integer, `qend` date, `cat_loss_usd` double precision, `cat_points` double precision, `basis` text, `accession` text, `url` text, `snippet` text
 
@@ -10,11 +10,11 @@ Generated from the live Postgres database by `scripts/schema_doc.py`.
 
 `term` text, `label` text, `coef` double precision, `se` double precision, `t` double precision, `r` double precision, `n` integer, `r2` double precision, `adj_r2` double precision, `cv_r2` double precision, `window_start` date, `window_end` date
 
-## `core.claims_ay` (table, 0 rows)
+## `core.claims_ay` (table, 17,952 rows)
 
 `cik` integer, `fy_filed` integer, `line` text, `accident_year` integer, `incurred_first` double precision, `incurred_latest` double precision, `paid_latest` double precision, `ibnr` double precision, `reported_claims` double precision
 
-## `core.claims_payout` (table, 0 rows)
+## `core.claims_payout` (table, 16,737 rows)
 
 `cik` integer, `fy_filed` integer, `line` text, `year_n` integer, `pct` double precision
 
@@ -22,31 +22,31 @@ Generated from the live Postgres database by `scripts/schema_doc.py`.
 
 `cik` integer, `qend` date, `paid` double precision, `paid_basis` text, `paid_ttm` double precision, `npe_ttm` double precision, `losses_ttm` double precision, `paid_lr_ttm` double precision, `incurred_lr_ttm` double precision, `paid_to_incurred_ttm` double precision
 
-## `core.claims_triangle` (table, 0 rows)
+## `core.claims_triangle` (table, 179,881 rows)
 
 `cik` integer, `fy_filed` integer, `accession` text, `line` text, `accident_year` integer, `eval_year` integer, `metric` text, `value` double precision
 
-## `core.claims_year` (table, 687 rows)
+## `core.claims_year` (table, 689 rows)
 
 `cik` integer, `fiscal_year` integer, `fy_end` date, `npe` double precision, `losses` double precision, `cy_losses` double precision, `py_development` double precision, `paid_cy` double precision, `paid_py` double precision, `paid` double precision, `paid_basis` text, `acquired` double precision, `fx` double precision, `net_reserves` double precision, `net_reserves_open` double precision, `gross_reserves` double precision, `recoverable_unpaid` double precision, `ibnr` double precision, `case_reserves` double precision, `equity` double precision, `paid_lr` double precision, `incurred_lr` double precision, `paid_to_incurred` double precision, `first_year_payout` double precision, ... (35 columns)
 
-## `core.company_quarter` (table, 2,637 rows)
+## `core.company_quarter` (table, 2,645 rows)
 
 Standardized quarterly financials and ratios (quarterly and trailing four quarters).
 
 `cik` integer, `qend` date, `acq_cost` double precision, `aoci` double precision, `assets` double precision, `buybacks` double precision, `cy_losses` double precision, `debt` double precision, `debt_afs` double precision, `dividends` double precision, `equity` double precision, `equity_securities` double precision, `gpw` double precision, `gross_reserves` double precision, `inv_gains` double precision, `investments` double precision, `losses` double precision, `net_income` double precision, `net_reserves` double precision, `nii` double precision, `npe` double precision, `npw` double precision, `oci` double precision, `other_uw_exp` double precision, ... (85 columns)
 
-## `core.company_status` (table, 56 rows)
+## `core.company_status` (table, 57 rows)
 
 `cik` integer, `derived` text, `curated` text, `agrees` boolean, `common_listed` boolean, `last_periodic` date, `last_change_of_control` date, `last_delisting` date, `last_deregistration` date, `pending_since` date, `pending_forms` text, `checked_on` date
 
-## `core.company_year` (table, 705 rows)
+## `core.company_year` (table, 707 rows)
 
 Fiscal-year view of the ratios.
 
 `cik` integer, `ticker` text, `fiscal_year` integer, `qend` date, `npe` double precision, `npw` double precision, `losses` double precision, `cy_losses` double precision, `py_development` double precision, `acq_cost` double precision, `nii` double precision, `net_income` double precision, `equity` double precision, `net_reserves` double precision, `investments` double precision, `loss_ratio` double precision, `cy_loss_ratio` double precision, `pyd_ratio` double precision, `expense_ratio` double precision, `combined_ratio` double precision, `roe` double precision, `npe_growth_yoy` double precision, `bv_growth_yoy` double precision, `reserve_to_npe` double precision, ... (30 columns)
 
-## `core.concept_value` (table, 52,224 rows)
+## `core.concept_value` (table, 52,280 rows)
 
 Each concept per company-quarter with the tag it came from, how it was derived and any flag.
 
@@ -58,19 +58,19 @@ View: fiscal-year values (for annual-only Schedule III tags).
 
 `cik` integer, `tag` text, `fy_end` date, `value` numeric, `filed` date
 
-## `core.fact_instant` (materialized view, 23,744 rows)
+## `core.fact_instant` (materialized view, 23,778 rows)
 
 Materialized: balance-sheet values at quarter ends.
 
 `cik` integer, `tag` text, `qend` date, `value` numeric, `filed` date
 
-## `core.fact_latest` (materialized view, 89,785 rows)
+## `core.fact_latest` (materialized view, 89,895 rows)
 
 Materialized: the most recently filed value per company, tag and period.
 
 `cik` integer, `tag` text, `period_start` date, `period_end` date, `value` numeric, `accession` text, `filed` date, `form` text
 
-## `core.fact_quarter` (materialized view, 42,253 rows)
+## `core.fact_quarter` (materialized view, 42,289 rows)
 
 Materialized: discrete quarters (reported 3-month values, else year-to-date differences).
 
@@ -88,7 +88,7 @@ Materialized: discrete quarters (reported 3-month values, else year-to-date diff
 
 `cik` integer, `filing_date` date, `accession` text, `items` text, `deal_key` text, `stayed_public` boolean
 
-## `core.ma_listing` (table, 48 rows)
+## `core.ma_listing` (table, 49 rows)
 
 `cik` integer, `listed_from` date, `from_basis` text, `listed_until` date, `until_basis` text, `deal_key` text
 
@@ -100,7 +100,7 @@ Quarterly risk drivers built from the raw macro, geopolitical and catastrophe ta
 
 ## `core.people_year` (table, 549 rows)
 
-`cik` integer, `fiscal_year` integer, `employees_reported` integer, `us_plan_active` integer, `us_plan_count` integer, `npe` double precision, `uw_expense` double precision, `share_based_comp` double precision, `dc_plan_cost` double precision, `labor_expense` double precision, `capex` double precision, `software_capitalized` double precision, `software_net` double precision
+`cik` integer, `fiscal_year` integer, `employees_reported` integer, `us_plan_active` integer, `us_plan_count` integer, `npe` double precision, `uw_expense` double precision, `share_based_comp` double precision, `dc_plan_cost` double precision, `labor_expense` double precision, `capex` double precision, `software_capitalized` double precision, `software_net` double precision, `employees_total` integer
 
 ## `core.peril_quarter` (table, 108 rows)
 
@@ -114,13 +114,13 @@ Quarterly risk drivers built from the raw macro, geopolitical and catastrophe ta
 
 `year` integer, `us_landfalls` integer, `us_landfalls_cat1` integer, `us_landfalls_cat2` integer, `us_landfalls_cat3` integer, `us_landfalls_cat4` integer, `us_landfalls_cat5` integer, `ace` double precision, `named_storms` integer, `hurricanes` integer, `tornadoes` integer, `sig_tornadoes` integer, `hail_reports` integer, `sig_hail` integer, `wind_reports` integer, `sig_wind` integer, `wildfire_fires` integer, `wildfire_acres` double precision, `nfip_paid` double precision, `nfip_claims` integer, `quakes_m5` integer, `quakes_m6` integer, `billion_cost` double precision, `billion_count` integer, ... (27 columns)
 
-## `meta.ingest_run` (table, 32 rows)
+## `meta.ingest_run` (table, 51 rows)
 
 One row per ingest run: source, status, rows loaded, timing.
 
 `run_id` bigint, `source` text, `status` text, `started_at` timestamp with time zone, `finished_at` timestamp with time zone, `rows_loaded` bigint, `detail` jsonb
 
-## `meta.schema_migrations` (table, 9 rows)
+## `meta.schema_migrations` (table, 10 rows)
 
 Applied migration files.
 
@@ -160,11 +160,11 @@ Reference scenario simulations per company (quantiles, probabilities).
 
 `cik` integer, `fiscal_year` integer, `period_end` date, `rd_usd` double precision
 
-## `raw.claims_instance` (table, 0 rows)
+## `raw.claims_instance` (table, 339 rows)
 
 `accession` text, `cik` integer, `fiscal_year` integer, `url` text, `n_facts` integer, `read_at` timestamp with time zone
 
-## `raw.claims_instance_fact` (table, 0 rows)
+## `raw.claims_instance_fact` (table, 242,373 rows)
 
 `accession` text, `cik` integer, `element` text, `value` double precision, `unit` text, `decimals` text, `period_start` date, `period_end` date, `dims` jsonb
 
@@ -210,19 +210,19 @@ Caldara-Iacoviello Geopolitical Risk index, every published variable, monthly.
 
 `month` date, `variable` text, `value` double precision
 
-## `raw.headcount_10k` (table, 0 rows)
+## `raw.headcount_10k` (table, 990 rows)
 
-`accession` text, `cik` integer, `form` text, `filing_date` date, `fiscal_year` integer, `employees` integer, `full_time` integer, `as_of` date, `snippet` text, `method` text, `doc_url` text
+`accession` text, `cik` integer, `form` text, `filing_date` date, `fiscal_year` integer, `employees` integer, `full_time` integer, `as_of` date, `snippet` text, `method` text, `doc_url` text, `insurance_employees` integer, `insurance_basis` text
 
 ## `raw.hurdat_point` (table, 55,524 rows)
 
 `storm_id` text, `storm_name` text, `season` integer, `obs_time` timestamp without time zone, `record_id` text, `status` text, `lat` double precision, `lon` double precision, `wind_kt` integer, `pressure_mb` integer
 
-## `raw.ma_deal_check` (table, 162 rows)
+## `raw.ma_deal_check` (table, 176 rows)
 
 `deal_key` text, `field` text, `phrase` text, `forms` text, `start_date` date, `end_date` date, `hits` integer, `first_date` date, `first_form` text, `first_accession` text, `first_file` text, `last_date` date, `last_accession` text, `last_file` text, `checked_at` timestamp with time zone
 
-## `raw.ma_deal_doc_fact` (table, 0 rows)
+## `raw.ma_deal_doc_fact` (table, 346 rows)
 
 `deal_key` text, `accession` text, `filename` text, `field` text, `value_text` text, `value_num` numeric, `snippet` text
 
@@ -256,21 +256,21 @@ Global land-ocean temperature departure, monthly.
 
 `month` date, `anomaly_c` double precision
 
-## `raw.sec_company` (table, 62 rows)
+## `raw.sec_company` (table, 63 rows)
 
 SEC submissions metadata per company (SIC, incorporation, tickers, former names).
 
 `cik` integer, `name` text, `sic` text, `sic_description` text, `category` text, `entity_type` text, `state_of_incorporation` text, `fiscal_year_end` text, `tickers` text[], `exchanges` text[], `former_names` jsonb, `fetched_at` timestamp with time zone
 
-## `raw.sec_document` (table, 0 rows)
+## `raw.sec_document` (table, 61,093 rows)
 
 `accession` text, `cik` integer, `kind` text, `seq` integer, `description` text, `filename` text, `doc_type` text, `size_bytes` bigint, `url` text
 
-## `raw.sec_document_index` (table, 0 rows)
+## `raw.sec_document_index` (table, 5,901 rows)
 
 `accession` text, `cik` integer, `kind` text, `n_documents` integer, `read_at` timestamp with time zone
 
-## `raw.sec_filing` (table, 95,789 rows)
+## `raw.sec_filing` (table, 95,823 rows)
 
 Every filing in each company's EDGAR index (10-K, 10-Q, 8-K, Forms 3/4/5, proxies ...).
 
@@ -286,7 +286,7 @@ NOAA Storm Events aggregated to month x state x event type (damage, deaths, inju
 
 `month` date, `state` text, `event_type` text, `n_events` integer, `property_damage_usd` double precision, `crop_damage_usd` double precision, `deaths_direct` integer, `injuries_direct` integer
 
-## `raw.tech_terms_10k` (table, 0 rows)
+## `raw.tech_terms_10k` (table, 6,930 rows)
 
 `accession` text, `cik` integer, `fiscal_year` integer, `term_key` text, `n` integer, `words` integer
 
@@ -294,19 +294,19 @@ NOAA Storm Events aggregated to month x state x event type (damage, deaths, inju
 
 `event_id` text, `time_utc` timestamp with time zone, `mag` double precision, `place` text, `state` text, `lat` double precision, `lon` double precision, `depth_km` double precision, `alert` text, `sig` integer, `felt` integer
 
-## `raw.xbrl_concept` (table, 3,746 rows)
+## `raw.xbrl_concept` (table, 3,750 rows)
 
 Label and definition of every XBRL concept seen.
 
 `taxonomy` text, `tag` text, `label` text, `description` text
 
-## `raw.xbrl_fact` (table, 1,092,774 rows)
+## `raw.xbrl_fact` (table, 1,093,275 rows)
 
 Every XBRL fact in every filing (companyfacts API); restated values keep their original rows.
 
 `cik` integer, `taxonomy` text, `tag` text, `unit` text, `period_start` date, `period_end` date, `value` numeric, `accession` text, `fiscal_year` integer, `fiscal_period` text, `form` text, `filed` date, `frame` text
 
-## `ref.company` (table, 62 rows)
+## `ref.company` (table, 63 rows)
 
 The curated universe: ticker, cohort, segment, status (active / acquired / exited), comparability.
 

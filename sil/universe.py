@@ -17,9 +17,10 @@ How it was built (the candidate list is scripts/discover_universe.py's output, k
 6. Six AI-infrastructure spenders, used only for an AI-capex indicator (capital expenditure tags).
 7. Kept current: scripts/discover_universe.py also reads the last two years' quarterly frames, so a carrier that
    listed recently shows up before its first 10-K, and sil/status.py checks every label against the filing
-   record at each build. Under review (November 2026): Orion180 Insurance Group (listed 2025, SIC 6411), whose
-   filings mention homeowners and personal lines; it stays out until its prospectus's business description is
-   read (rule 3).
+   record at each build. Orion180 Insurance Group (SIC 6411) was found this way: it listed in September 2026 and
+   its prospectus describes "a specialty insurance group" and "the second largest excess and surplus ("E&S") lines
+   homeowners insurance provider in the United States", so it is in by rule 3, like Palomar's specialty property.
+   It is not comparable: its MGA services segment earns about 70% of segment revenue and its own carriers cede most premium.
 
 Status notes say what the filing index shows (form types and dates) or what was widely reported (acquirer and year).
 """
@@ -61,6 +62,10 @@ COMPANIES: list[Company] = [
     Company(2040491, "ASIC", "Ategrity Specialty", "specialty", ES),
     Company(1761312, "PLMR", "Palomar Holdings", "specialty", ES, include_note="specialty property (earthquake, wind, flood)"),
     Company(1997350, "ARX", "Accelerant Holdings", "specialty", ES, include_note="specialty risk exchange (insurer + MGA platform)"),
+    Company(2124472, "OIG", "Orion180", "specialty", ES,
+            include_note="E&S homeowners and private flood, MGA-led: its services segment earns about 70% of segment revenue and its own"
+            " carriers cede most premium (99% of direct premiums written in 2026 so far), so its underwriting ratios"
+            " are not comparable; listed September 2026; kept out of the model and peer averages", comparable=False),
     Company(1502292, "PRHI", "Presurance (Conifer)", "specialty", ES, include_note="formerly Conifer Holdings"),
     Company(793547, "NAVG", "Navigators Group", "specialty", ES, "acquired", 2019, "acquired by The Hartford"),
     Company(888919, "HCC", "HCC Insurance", "specialty", ES, "acquired", 2015, "acquired by Tokio Marine"),

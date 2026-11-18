@@ -539,10 +539,16 @@ def _reported_block(conn, rep: pd.DataFrame, pq: pd.DataFrame, comp: pd.DataFram
     for cik, g in rep.groupby("cik"):
         g = g.sort_values("qend")
         model = (float(lam[cik]) * f.reindex(g["qend"]).to_numpy()) if cik in lam.index else None
+        # every quarter from the first to the last reported one: a quarter whose release states no figure stays
+        # empty (the chart must not draw a line through it), while the model's component is known for all of them
+        grid = pd.date_range(g["qend"].min(), g["qend"].max(), freq="QE")
+        gg = g.set_index("qend").reindex(grid)
+        model_all = (float(lam[cik]) * f.reindex(grid).to_numpy()) if cik in lam.index else None
         block["series"][str(int(cik))] = {
-            "q": [d.strftime("%Y-%m-%d") for d in g["qend"]], "usd": _arr(g["cat_loss_usd"]),
-            "ratio": _arr(g["ratio"], 3), "basis": list(g["basis"]),
-            "model": _arr(model, 3) if model is not None else None,
+            "q": [d.strftime("%Y-%m-%d") for d in grid], "usd": _arr(gg["cat_loss_usd"]),
+            "ratio": _arr(gg["ratio"], 3), "basis": [b if isinstance(b, str) else None for b in gg["basis"]],
+            "model": _arr(model_all, 3) if model_all is not None else None,
+            "reported": int(g["ratio"].notna().sum()),
         }
         if model is not None:
             ok = np.isfinite(model) & g["ratio"].notna().to_numpy()

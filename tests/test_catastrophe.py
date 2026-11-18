@@ -147,7 +147,7 @@ def test_extract_sentence_after_and_before():
          "quarter. The prior year included $1.1 billion of net catastrophe losses.")
     got = _amounts(t)
     assert got[0] == (pytest.approx(45.2e6), "quarter", "sentence")
-    assert got[1][0] == pytest.approx(1.1e9)
+    assert len(got) == 1  # "The prior year included $1.1 billion ...": the comparison period, not a candidate
 
 
 def test_extract_scopes_and_points():
@@ -181,6 +181,80 @@ def test_choose_prefers_quarter_and_keeps_year_in_q4():
     only_year = cl.choose(cl.extract("For the full year 2024, catastrophe losses were $500 million."),
                           date(2024, 12, 31))
     assert only_year["quarter"] is None and only_year["year"].value == pytest.approx(500e6)
+
+
+NOT_THE_QUARTERS_LOSSES = [
+    "Core operating income was strong; underwriting income excluding catastrophe losses was $2.26 billion, up 3.3%.",
+    "Our results include $14.1 million of attritional and $0.2 million of catastrophe loss favorable prior year development.",
+    "This range includes an estimate of $8 million to $12 million of catastrophe losses for the remainder of the year.",
+    "Q4 AFTER-TAX CATASTROPHE LOSSES OF $24M",
+    "In the quarter, after-tax catastrophe losses were $400 million.",
+    "Catastrophe losses for the quarter included an approximate $65 million preliminary provision for COVID-19 claims.",
+    "Included in September results is $167.6 million of catastrophe losses, or 4.7 loss ratio points, from Hurricane Ida.",
+    "During September 2024, we incurred $563 million of catastrophe losses, or 9.0 loss ratio points.",
+    "The Commercial Lines combined ratio was 95.4%. Catastrophe losses were $29.5 million, or 4.8 points.",
+    "Underwriting loss in the first quarter of 2020 included $153 million of catastrophe losses at TransRe.",
+    "Strong quarter. In the prior year quarter, natural catastrophe losses were $181.1 million.",
+    "Ratios\n | Net catastrophe losses | 5.5 | | pts | 3.1 | | 2.4 |\n",
+    "Reinsurance. Underwriting gain of $228 million including $125 million of catastrophe losses net of recoveries.",
+]
+
+# statements a release for a given quarter (year) must not take as that quarter's figure
+ASPEN_2017 = ("Pre-tax catastrophe losses, net of reinsurance recoveries, totaled $54.6 million, or 8.9 percentage points,"
+              " in the fourth quarter of 2016.")
+ALLSTATE_2009 = ("Fourth quarter 2009 included catastrophe losses of $210 million from 13 events during the quarter and"
+                 " $148 million related to reestimates of events during the first nine months of 2009.")
+OTHER_QUARTER = [(ASPEN_2017, 2017), (ALLSTATE_2009, 2009)]
+
+
+@pytest.mark.parametrize(("text", "year"), OTHER_QUARTER)
+def test_extract_skips_other_quarters_and_partial_figures(text, year):
+    assert [c.value for c in cl.extract(text, quarter_year=year) if c.kind == "amount"] == []
+
+
+def test_no_catastrophe_losses_only_when_no_amount_is_stated_and_only_for_this_quarter():
+    seg = "Catastrophe losses were $40 million in the quarter.\nSpecialty. There were no catastrophe losses in the quarter."
+    assert all(c.source != "none" for c in cl.extract(seg, quarter_year=2024))
+    prior = ("Loss ratio of 62.0% compared to 60.5% for the first quarter of 2019 with no catastrophe losses in 2019 and"
+             " COVID-19 as the only potential catastrophe thus far in 2020.")
+    assert [c for c in cl.extract(prior, quarter_year=2020) if c.source == "none"] == []
+    quiet = "There were no catastrophe losses in the quarter."
+    assert [c.value for c in cl.extract(quiet, quarter_year=2024) if c.source == "none"] == [0.0]
+
+
+def test_points_imply_the_premium_base():
+    assert cl.consistent_with_premium(40e6, 1.5, 2.6e9)          # CNA: $40 million, 1.5 points
+    assert not cl.consistent_with_premium(12.5e6, 5.2, 1.1e9)    # a segment's $12.5 million, 5.2 points
+    assert cl.consistent_with_premium(12.5e6, None, 1.1e9)       # no points stated: nothing to check
+
+
+@pytest.mark.parametrize("text", NOT_THE_QUARTERS_LOSSES)
+def test_extract_skips_figures_that_are_not_the_quarters_catastrophe_losses(text):
+    assert [c.value for c in cl.extract(text) if c.kind == "amount"] == []
+
+
+def test_fourth_quarter_release_needs_the_quarter_named():
+    t = "Pre-tax catastrophe losses were $2.39 billion compared with $1.83 billion last year."
+    assert cl.choose(cl.extract(t, quarter_year=2024), date(2024, 12, 31))["quarter"] is None
+    assert cl.choose(cl.extract(t, quarter_year=2024), date(2024, 9, 30))["quarter"].value == pytest.approx(2.39e9)
+
+
+def test_full_year_statement_in_a_fourth_quarter_release_is_the_year():
+    t = "Full year favorable development was $120 million. Catastrophe losses were $46 million in 2011 compared to $49 million."
+    ch = cl.choose(cl.extract(t, quarter_year=2011), date(2011, 12, 31))
+    assert ch["quarter"] is None and ch["year"].value == pytest.approx(46e6)
+
+
+def test_choose_takes_the_group_figure_before_the_segments_and_ignores_comparisons():
+    t = ("First quarter 2015 results. Estimated pre-tax catastrophe losses were $3.0 million or 0.9 points on the combined"
+         " ratio, compared to $4.2 million in 2014.\nExcess and Surplus Lines. Catastrophe losses for the quarter were $0.5"
+         " million or 0.4 points.\nCommercial Specialty. Catastrophe losses for the quarter were $1.0 million or 1.0 point"
+         " on the combined ratio, compared to no catastrophe losses in the first quarter of 2014.")
+    ch = cl.choose(cl.extract(t), date(2015, 3, 31))
+    assert ch["quarter"].value == pytest.approx(3.0e6)
+    assert all(c.source != "none" for c in cl.extract(t))  # "compared to no catastrophe losses" is the prior year
+    scopes = [c.scope for c in cl.extract(t) if c.kind == "amount"]
+    assert scopes.count("quarter") == 2  # "for the quarter were $0.5 million": period words before the amount
 
 
 def test_q4_derivation_and_plausibility():

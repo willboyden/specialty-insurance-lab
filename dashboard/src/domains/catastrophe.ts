@@ -30,11 +30,14 @@ export interface CatCompany {
 }
 
 export interface CatReportedSeries {
+  /** every quarter from the first to the last reported one; a quarter whose release states no figure is null */
   q: string[];
   usd: Num[];
   ratio: Num[]; // catastrophe losses / net premiums earned in the quarter
-  basis: string[]; // quarter | derived
-  model: Num[] | null; // lam x shock: the model's catastrophe component of the loss ratio
+  basis: (string | null)[]; // quarter | derived | null (not stated)
+  model: Num[] | null; // lam x shock: the model's catastrophe component of the loss ratio, every quarter
+  /** quarters with a reported figure */
+  reported?: number;
 }
 
 export type CatYearKey =

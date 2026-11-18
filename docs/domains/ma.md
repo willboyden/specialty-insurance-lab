@@ -44,11 +44,19 @@ filings** inside the deal window:
   `$10.00 in cash`, `$5.00 per share special dividend`).
 - **Earlier prices:** an amended agreement's first price (American Safety $29.25 to $30.25, Tower $3.00 to $2.50,
   AmTrust $13.50 to $14.75) and a proposal that preceded the agreement (National Interstate's $30.00).
+- **Pending deals** are checked the same way. Bowhead: `"American Family" "$34.00 per share"` in its 8-K of
+  3 August 2026 (press release and merger agreement). Accelerant: `"Thoma Bravo" "$20.25 per share"` in its 8-K of
+  13 August 2026; its ticking amount (`"$0.00333"` with `"calendar day"`) is in the merger agreement.
 
 Every check is stored in `raw.ma_deal_check` with its hit count and the first matching document, and the dashboard
 links to that document. With the deal documents cached, `sil/sources/deal_docs.py` reads the price, the form of
 payment, the buyer (the merger agreement's "Parent") and the agreement date from them, and `core.ma_deal.doc_agrees`
-records whether they match the search-verified price.
+records whether they match the search-verified price. Only documents filed from 30 days before the announcement count
+(Tower's 2013 merger with Canopius Bermuda is not its 2014 sale to ACP Re), and a "par value $1.00 per share" is never a
+price. Read this way, the price most documents state agrees with the search-verified one for 19 of 23 deals; the four
+that differ are explained: three amended deals whose first agreed price the documents also state (AmTrust $13.50,
+American Safety $29.25, Tower $3.00) and Alleghany, whose $848.02 "represents $850.00 per share less the financial
+advisory fee due to Goldman Sachs" (its merger proxy).
 
 ## Dates
 
@@ -70,6 +78,13 @@ records whether they match the search-verified price.
 - **Price-to-book** = price ÷ (common equity ÷ shares), where common equity is total equity less preferred stock, at the
   last quarter before the announcement. When preferred stock was outstanding (preferred dividends were paid) but its
   value is not in the XBRL facts, no multiple is published (Aspen 2019).
+- **Several share classes:** when neither the cover page nor the balance sheet has a single share count (the classes are
+  counted only in dimensional facts), the last quarter's weighted-average basic shares are used, which cover every
+  class (Accelerant, 2026).
+- **Pending deals** get the same multiple, at the agreed price and the last quarter before the announcement. The page
+  draws a pending deal on the price-to-book chart only inside the closed deals' ranges: Accelerant (6.2× book, a
+  trailing ROE of −244% after a $1.37 billion net loss in Q3 2025, the quarter it listed) is named in the caption
+  instead.
 - **Target ROE and combined ratio:** trailing four quarters at that quarter (`core.company_quarter`).
 
 ## Listed universe
@@ -97,5 +112,5 @@ own reserves (HCC's 2012 fact is tagged $14.7 billion).
   family buy-outs).
 - Change-of-control 8-Ks (item 5.01) of carriers that stayed listed are listed with links only: the item also covers
   reorganizations and new controlling holders, and the filing text says which.
-- The buyers of the pending take-privates (Bowhead, Accelerant) are named only in their merger proxies, which the
-  page reads once the filing documents are cached.
+- Pending deals can still change or fail: the page shows them as pending (dashed) and keeps them out of every
+  closed-deal statistic.

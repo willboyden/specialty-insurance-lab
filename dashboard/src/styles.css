@@ -193,6 +193,10 @@ figure.card .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 
 .legend .swatch-line { width: 16px; height: 2px; border-radius: 2px; display: inline-block; }
 .legend .swatch-box { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
 .legend .swatch-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.legend .swatch-outline, .legend .swatch-ring { width: 10px; height: 10px; display: inline-block; box-sizing: border-box;
+  border: 1.5px dashed; background: transparent; }
+.legend .swatch-outline { border-radius: 3px; }
+.legend .swatch-ring { border-radius: 50%; }
 
 .table-view { max-height: 420px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; }
 .table-view table { border-collapse: collapse; width: 100%; font-size: 12.5px; font-variant-numeric: tabular-nums; }

@@ -260,7 +260,28 @@ def domain_findings(cat: dict | None) -> list[str]:
                 (f"- Premium growth and paid-to-incurred across {growth[1]} active carriers, fiscal {latest}: "
                  f"correlation {growth[0]:+.2f} (new business is incurred at once and paid over years)."),
                 "- Largest single-year reserve charges: " + ", ".join(
-                    f"{nm} {fy} ({pct(d, 1)} of opening reserves)" for nm, fy, d in worst) + ".", ""]
+                    f"{nm} {fy} ({pct(d, 1)} of opening reserves)" for nm, fy, d in worst) + "."]
+        # accident-year triangles (ASU 2015-09) from each carrier's latest 10-K: incurred at age 3 against the first
+        tri = conn.execute("""
+            with latest as (select cik, max(fy_filed) fy from core.claims_triangle group by cik),
+            inc as (select t.cik, t.line, t.accident_year ay, t.eval_year - t.accident_year age, t.value
+                    from core.claims_triangle t join latest l on l.cik = t.cik and l.fy = t.fy_filed
+                    join ref.company r on r.cik = t.cik
+                    where t.metric = 'incurred' and r.cohort = 'specialty' and r.comparable)
+            select a.ay, sum(a.value) / sum(b.value) - 1, count(distinct a.cik) from inc a join inc b
+              on a.cik = b.cik and a.line = b.line and a.ay = b.ay and b.age = 0
+            where a.age = 2 group by a.ay having count(distinct a.cik) >= 10 order by a.ay""").fetchall()
+        n_tri = one("select count(distinct t.cik) from core.claims_triangle t join ref.company r on r.cik = t.cik"
+                    " where r.cohort = 'specialty' and r.comparable")[0]
+        older = [float(d) for ay, d, _n in tri if 2014 <= ay <= 2019]
+        recent = [float(d) for ay, d, _n in tri if ay >= 2020]
+        if older and recent:
+            out.append(f"- Accident-year triangles (each carrier's latest 10-K, {n_tri} comparable specialty carriers):"
+                       f" at age 3, accident years 2014–2019 stood between {spct(min(older))} and {spct(max(older))}"
+                       f" of their first incurred estimates, 2020–{max(ay for ay, _d, _n in tri)} between"
+                       f" {spct(min(recent))} and"
+                       f" {spct(max(recent))} (incurred-weighted; the mix of carriers differs by year).")
+        out.append("")
 
     # ---- catastrophes
     if cat and cat.get("fit"):
@@ -283,7 +304,16 @@ def domain_findings(cat: dict | None) -> list[str]:
                  f"seasons: El Niño seasons average {enso[2]:.0f} ACE, La Niña seasons {enso[3]:.0f}."),
                 f"- Seasons since 2000 without a US hurricane landfall: {', '.join(map(str, quiet))}.",
                 (f"- NFIP paid ${nfip[0] / 1e9:.1f}B (nominal) on flood events since 2000; the largest is "
-                 f"{top[0]} at ${top[1] / 1e9:.1f}B."), ""]
+                 f"{top[0]} at ${top[1] / 1e9:.1f}B.")]
+        rep = cat.get("reported") or {}
+        val = rep.get("validation")
+        if val:
+            n_rep = len(rep.get("series") or {})
+            out.append(f"- Catastrophe losses carriers state in their earnings releases ({rep['companyQuarters']} "
+                       f"carrier-quarters, {n_rep} carriers): their share of premiums correlates {val['pooledR']:+.2f} "
+                       f"with the model's implied catastrophe load (sensitivity times industry shock) over "
+                       f"{val['n']} carrier-quarters.")
+        out.append("")
 
     # ---- mergers and acquisitions
     closed = conn.execute("""
@@ -314,7 +344,17 @@ def domain_findings(cat: dict | None) -> list[str]:
                                           for g, rs in sorted(by_grp.items(), key=lambda kv: -len(kv[1]))) + ".",
                 (f"- Median time from the first statement of terms to closing: {st.median(days):.0f} days "
                  f"({days[0]}–{days[-1]})."),
-                f"- Listed specialty carriers in this universe: {listed[0]} at the end of 2008, {listed[1]} now.", ""]
+                f"- Listed specialty carriers in this universe: {listed[0]} at the end of 2008, {listed[1]} now."]
+        pending = conn.execute("""
+            select c.short_name, r.acquirer, r.price, d.announced, d.price_to_book, d.implied_value
+            from core.ma_deal d join ref.ma_deal r using (key) join ref.company c on c.cik = d.cik
+            where d.status = 'pending' and d.acquirer_verified and d.price_verified order by d.announced""").fetchall()
+        if pending:
+            out.append("- Pending take-privates: " + "; ".join(
+                f"{name} by {buyer} at ${float(price):.2f} a share, announced {ann.isoformat()}"
+                + (f" ({float(pb):.2f}× book, ${float(val) / 1e9:.1f}B)" if pb is not None and val is not None else "")
+                for name, buyer, price, ann, pb, val in pending) + ".")
+        out.append("")
 
     # ---- people and technology
     yr = one("select max(fiscal_year) from core.people_year where us_plan_active is not null")[0]
@@ -346,6 +386,15 @@ def domain_findings(cat: dict | None) -> list[str]:
             out.append(f"- {sum(g > 0 for g in gaps)} of {len(gaps)} of those carriers grew premium faster than US "
                        f"plan staff over {yr - 5}–{yr}; median gap {pts(st.median(gaps))} a year (premium growth "
                        "includes rate increases, so part of the gap is pricing).")
+        head = one("""select p.fiscal_year, percentile_cont(0.5) within group (order by p.npe / p.employees_reported),
+                count(*) from core.people_year p join ref.company c using (cik)
+                where c.cohort = 'specialty' and c.comparable and c.status = 'active' and p.employees_reported > 0
+                  and p.npe > 0
+                group by p.fiscal_year having count(*) >= 10 order by p.fiscal_year desc limit 1""")
+        if head:
+            out.append(f"- Median premium per employee from each 10-K's reported headcount, fiscal {head[0]}: "
+                       f"${head[1] / 1e6:.2f}M across {head[2]} active specialty carriers (a group with "
+                       "non-insurance businesses is counted by the insurance staff its 10-K states).")
         if ai:
             out.append("- Share of active specialty carriers' 10-K and 10-Q filings mentioning artificial "
                        "intelligence: " + ", ".join(f"{y} {pct(v)}" for y, v in sorted(ai.items())) + ".")

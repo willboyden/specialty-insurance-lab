@@ -29,7 +29,7 @@ export function groupColor(g: string): string {
 
 /** "$78.00 per share in cash" / "stock and cash" / "not verified" */
 export function priceLabel(d: MaDeal): string {
-  if (d.status === "pending") return "terms in the merger proxy";
+  if (d.status === "pending" && d.price == null) return "terms in the merger proxy";
   if (d.price != null) return `$${d.price.toFixed(2)} per share${d.consideration === "cash" ? " in cash" : d.consideration === "mixed" ? " (stock and cash)" : ""}`;
   if (d.consideration === "mixed") return "stock and cash";
   return "price not verified";
@@ -52,6 +52,7 @@ const SHORT: Record<string, string> = {
   "Intact Financial": "Intact",
   "Sompo Holdings": "Sompo",
   "Enstar Group": "Enstar",
+  "American Family Insurance": "American Family",
 };
 
 export function shortBuyer(d: MaDeal): string {
